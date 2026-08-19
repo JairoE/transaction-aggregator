@@ -187,15 +187,39 @@ Start the server again; `create_database` re-applies `0600`/`0700` permissions o
 
 ### Rotate the encryption key
 
-**No automated rotation command exists in the codebase today.** `TokenCipher` (`backend/app/services/crypto.py`) supports only one active key/version pair at a time — encryption is bound to the configured `TOKEN_ENCRYPTION_KEY_VERSION` via AES-GCM associated data (`f"plaid-access-token:v{key_version}:{context}"`, where `context` is the connection row's own id), and `decrypt` raises `ValueError` if the stored `key_version` does not match the configured cipher. `ConnectionService` (`backend/app/services/connection_service.py`) has no rotation method; it only encrypts on exchange and decrypts on use.
+Back up first (see above). Generate a new key, then re-encrypt every stored
+Plaid access token under it:
 
-Rotating the key correctly means re-encrypting the access token in every active `bank_connections` row, one at a time, because the associated data binds each ciphertext to that specific row's id — you cannot bulk re-encrypt with a single operation. The actual procedure today, if you need one, is a manual one-off script:
+```bash
+uv run --directory backend python -m app.cli generate-keys
+```
 
-1. Load both keys: a `TokenCipher` built from the current `TOKEN_ENCRYPTION_KEY`/`TOKEN_ENCRYPTION_KEY_VERSION`, and a second one from a freshly generated key at the next version number.
-2. For every `bank_connections` row with `lifecycle_status='active'` and a non-null `access_token_ciphertext`: decrypt with the old cipher using `context=<row id>`, re-encrypt with the new cipher using the same `context=<row id>`, and write the new `access_token_ciphertext`/`access_token_nonce`/`access_token_key_version` back to that row in the same transaction.
-3. Update `backend/.env` with the new `TOKEN_ENCRYPTION_KEY` and incremented `TOKEN_ENCRYPTION_KEY_VERSION`, then restart the app.
+```bash
+uv run --directory backend python -m app.cli rotate-key --new-version 2 --new-key <new-base64-key>
+```
 
-No such script ships in this repository — write and review it carefully (ideally against a backup, per Section 9's backup procedure) before running it against real data.
+Omit `--new-key` to read the key from stdin instead of leaving it in shell
+history. The command re-encrypts every row whose token is still under the old
+version and reports how many it rewrote.
+
+Then set `TOKEN_ENCRYPTION_KEY` to the new key and
+`TOKEN_ENCRYPTION_KEY_VERSION` to the new version in `backend/.env`, and
+restart the app.
+
+What the command guarantees:
+
+- The whole rotation runs in one transaction. If any row fails to decrypt,
+  nothing is written and the old key stays the working key.
+- Ciphertext stays bound to its own connection row, because AES-GCM associated
+  data covers both the key version and the row id
+  (`plaid-access-token:v{version}:{connection_id}`). A ciphertext copied into
+  a different row still fails to decrypt after rotation.
+- Rows already at the target version are skipped, so an interrupted run can be
+  re-run safely.
+- The new version must be greater than the current one; reusing a version is
+  rejected.
+
+Tombstone rows hold no token and are skipped.
 
 ### Inspect sync health
 

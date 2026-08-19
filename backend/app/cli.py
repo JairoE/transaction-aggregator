@@ -30,6 +30,27 @@ async def _create_owner(email: str, password: str) -> str:
         await database.dispose()
 
 
+async def _rotate_key(new_key: str, new_version: int) -> int:
+    from app.services.crypto import TokenCipher
+    from app.services.key_rotation import rotate_token_encryption_key
+
+    settings = get_settings()
+    current = TokenCipher.from_base64_key(
+        settings.token_encryption_key.get_secret_value(),
+        settings.token_encryption_key_version,
+    )
+    replacement = TokenCipher.from_base64_key(new_key, new_version)
+
+    database = create_database(settings)
+    try:
+        async with database.session() as session:
+            rotated = await rotate_token_encryption_key(session, current, replacement)
+            await session.commit()
+            return rotated
+    finally:
+        await database.dispose()
+
+
 def _prompt_password() -> str:
     first = getpass("Owner password: ")
     second = getpass("Confirm password: ")
@@ -57,7 +78,38 @@ def main(argv: list[str] | None = None) -> int:
 
     commands.add_parser("generate-keys", help="Print fresh local secrets")
 
+    rotate = commands.add_parser(
+        "rotate-key", help="Re-encrypt stored Plaid tokens under a new key"
+    )
+    rotate.add_argument(
+        "--new-version",
+        type=int,
+        required=True,
+        help="Key version for the new key; must exceed the current version.",
+    )
+    rotate.add_argument(
+        "--new-key",
+        help="URL-safe base64 32-byte key. Omit to read it from stdin.",
+    )
+
     args = parser.parse_args(argv)
+
+    if args.command == "rotate-key":
+        new_key = args.new_key or sys.stdin.readline().strip()
+        if not new_key:
+            print("A new key is required.", file=sys.stderr)
+            return 1
+        try:
+            rotated = asyncio.run(_rotate_key(new_key, args.new_version))
+        except Exception as error:
+            print(f"Rotation aborted: {error}", file=sys.stderr)
+            return 1
+        print(f"Re-encrypted {rotated} connection(s).")
+        print(
+            "Now set TOKEN_ENCRYPTION_KEY to the new key and "
+            f"TOKEN_ENCRYPTION_KEY_VERSION={args.new_version}, then restart."
+        )
+        return 0
 
     if args.command == "generate-keys":
         print(f"APPLICATION_SECRET={secrets.token_urlsafe(48)}")
