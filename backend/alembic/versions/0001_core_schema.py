@@ -1,7 +1,7 @@
 """core schema
 
 Revision ID: 0001
-Revises: 
+Revises:
 Create Date: 2026-08-19 08:25:40.145391
 """
 

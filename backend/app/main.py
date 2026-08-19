@@ -151,4 +151,3 @@ def create_app(
     mount_spa(app, Path(__file__).resolve().parents[2] / "frontend" / "dist")
 
     return app
-
