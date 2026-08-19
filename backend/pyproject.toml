@@ -1,0 +1,36 @@
+[project]
+name = "transaction-aggregator-api"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic>=1.16,<2",
+  "aiosqlite>=0.21,<1",
+  "cryptography>=45,<46",
+  "fastapi>=0.116,<1",
+  "httpx>=0.28,<1",
+  "plaid-python>=38,<40",
+  "pydantic-settings>=2.10,<3",
+  "pwdlib[argon2]>=0.2,<1",
+  "sqlalchemy[asyncio]>=2.0.43,<3",
+  "uvicorn[standard]>=0.35,<1",
+]
+
+[dependency-groups]
+dev = [
+  "anyio>=4.10,<5",
+  "freezegun>=1.5,<2",
+  "pytest>=8.4,<9",
+  "pytest-asyncio>=1.1,<2",
+  "pytest-cov>=6.2,<7",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

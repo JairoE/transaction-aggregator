@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Node
+node_modules/
+dist/
+.vite/
+playwright-report/
+test-results/
+
+# Local data and secrets
+.env
+.env.local
+data/
+*.db
+*.db-wal
+*.db-shm
+
+# OS
+.DS_Store
