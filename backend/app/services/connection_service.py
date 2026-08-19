@@ -441,6 +441,7 @@ class ConnectionService:
     def _upsert_cards(
         self, connection: BankConnection, accounts: list[PlaidAccount]
     ) -> None:
+        order = 0
         for account in accounts:
             if account.type != "credit":
                 continue
@@ -455,8 +456,10 @@ class ConnectionService:
                     mask=account.mask,
                     subtype=account.subtype,
                     is_active=True,
+                    display_order=order,
                 )
             )
+            order += 1
 
 
 __all__ = [

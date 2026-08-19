@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse
 
 from app.api import auth as auth_api
 from app.api import connections as connections_api
+from app.api import search as search_api
 from app.api import sync as sync_api
 from app.api import webhooks as webhooks_api
 from app.config import Settings, get_settings
@@ -122,6 +123,7 @@ def create_app(
 
     app.include_router(auth_api.router)
     app.include_router(connections_api.router)
+    app.include_router(search_api.router)
     app.include_router(sync_api.router)
     app.include_router(webhooks_api.router)
 

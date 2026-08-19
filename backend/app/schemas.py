@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, EmailStr, Field
@@ -97,8 +97,41 @@ class ExchangeResponse(BaseModel):
     sync_job_id: str | None
 
 
+class TransactionMatch(BaseModel):
+    id: str
+    card_id: str
+    merchant_name: str | None
+    description: str
+    original_description: str | None
+    category: str | None
+    amount_cents: int
+    currency_code: str
+    authorized_date: date | None
+    posted_date: date | None
+    pending: bool
+
+
+class CardTransactionGroup(BaseModel):
+    card: CardResponse
+    transactions: list[TransactionMatch]
+    match_count: int
+    next_cursor: str | None
+    has_more: bool
+
+
+class GroupedSearchResponse(BaseModel):
+    query: str
+    total_matches: int
+    card_count: int
+    groups: list[CardTransactionGroup]
+    cache_as_of: datetime | None
+
+
 __all__ = [
     "BankConnectionResponse",
+    "CardTransactionGroup",
+    "GroupedSearchResponse",
+    "TransactionMatch",
     "BankSlug",
     "CardResponse",
     "ConnectionsResponse",

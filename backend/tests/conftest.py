@@ -92,8 +92,8 @@ def seeded_card(migrated_sqlite_path: str) -> dict[str, str]:
         )
         connection.execute(
             "INSERT INTO card_accounts (id, connection_id, plaid_account_id, name, "
-            "official_name, mask, subtype, is_active, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "official_name, mask, subtype, is_active, display_order, created_at, "
+            "updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
                 "card-1",
                 "conn-1",
@@ -103,6 +103,7 @@ def seeded_card(migrated_sqlite_path: str) -> dict[str, str]:
                 "4812",
                 "credit card",
                 1,
+                0,
                 now,
                 now,
             ),
@@ -122,13 +123,19 @@ async def db_session(database) -> AsyncIterator[AsyncSession]:
 
 @pytest.fixture
 async def database(settings_env: dict[str, str]):
+    """A migrated database, so tests exercise the real schema and FTS index."""
+
     from app.config import get_settings
     from app.db import create_database
 
     get_settings.cache_clear()
     settings = get_settings()
+    sync_url = settings.database_url.replace(
+        "sqlite+aiosqlite://", "sqlite+pysqlite://"
+    )
+    command.upgrade(alembic_config(sync_url), "head")
+
     database = create_database(settings)
-    await database.create_all()
     try:
         yield database
     finally:
@@ -338,3 +345,69 @@ async def connected_item_id(db_session, connected_connection) -> str:
 
     connection = await db_session.get(BankConnection, connected_connection.id)
     return connection.plaid_item_id
+
+
+@pytest.fixture
+def demo_plaid():
+    from app.services.demo_gateway import DemoPlaidGateway
+
+    return DemoPlaidGateway()
+
+
+@pytest.fixture
+async def demo_app(database, demo_plaid):
+    from app.config import get_settings
+    from app.main import create_app
+
+    return create_app(
+        settings=get_settings(), database=database, plaid_gateway=demo_plaid
+    )
+
+
+@pytest.fixture
+async def demo_client(demo_app):
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(
+        transport=ASGITransport(app=demo_app), base_url="http://127.0.0.1:8000"
+    ) as http_client:
+        yield http_client
+
+
+@pytest.fixture
+async def eight_card_owner(db_session, owner, demo_plaid, token_cipher):
+    """Connect all four demo banks and sync them, producing eight cards."""
+
+    from app.config import get_settings
+    from app.services.connection_service import ConnectionService
+    from app.services.demo_gateway import DEMO_BANKS
+    from app.services.sync_service import SyncService
+
+    get_settings.cache_clear()
+    connections = ConnectionService(db_session, get_settings(), demo_plaid, token_cipher)
+    sync = SyncService(db_session, demo_plaid, token_cipher)
+
+    for slug, bank in DEMO_BANKS.items():
+        connection = await connections.exchange_public_token(
+            owner, slug, f"public-demo-{slug}", bank.institution_id, bank.display_name
+        )
+        await sync.synchronize(connection.id)
+    await db_session.commit()
+    return owner
+
+
+@pytest.fixture
+async def search_service(db_session, settings_env):
+    from app.services.search_service import SearchService
+
+    return SearchService(db_session, settings_env["APPLICATION_SECRET"])
+
+
+@pytest.fixture
+async def demo_login(demo_client, owner):
+    response = await demo_client.post(
+        "/api/auth/login",
+        json={"email": owner.email, "password": "correct horse battery staple"},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()

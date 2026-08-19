@@ -98,6 +98,7 @@ def upgrade() -> None:
     sa.Column('mask', sa.String(length=8), nullable=True),
     sa.Column('subtype', sa.String(length=32), nullable=True),
     sa.Column('is_active', sa.Boolean(), nullable=False),
+    sa.Column('display_order', sa.Integer(), nullable=False),
     sa.Column('created_at', app.models.UtcDateTime(length=32), nullable=False),
     sa.Column('updated_at', app.models.UtcDateTime(length=32), nullable=False),
     sa.ForeignKeyConstraint(['connection_id'], ['bank_connections.id'], ondelete='CASCADE'),

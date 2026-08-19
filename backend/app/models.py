@@ -187,6 +187,8 @@ class CardAccount(TimestampMixin, Base):
     mask: Mapped[str | None] = mapped_column(String(8), nullable=True)
     subtype: Mapped[str | None] = mapped_column(String(32), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    # Provider discovery order, so panels appear as the bank listed them.
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
     connection: Mapped[BankConnection] = relationship(back_populates="cards")
     transactions: Mapped[list[Transaction]] = relationship(

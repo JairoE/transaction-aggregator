@@ -24,6 +24,17 @@ def _database_url() -> str:
     return override
 
 
+# The FTS5 index and its shadow tables are created by raw DDL in migration
+# 0002, so autogenerate must not try to drop them as "unknown" tables.
+IGNORED_TABLE_PREFIXES = ("transactions_fts", "sqlite_")
+
+
+def include_name(name, type_, parent_names) -> bool:  # type: ignore[no-untyped-def]
+    if type_ == "table" and name:
+        return not name.startswith(IGNORED_TABLE_PREFIXES)
+    return True
+
+
 def run_migrations_offline() -> None:
     context.configure(
         url=_database_url(),
@@ -31,6 +42,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         render_as_batch=True,
         user_module_prefix="app.models.",
+        include_name=include_name,
         dialect_opts={"paramstyle": "named"},
     )
     with context.begin_transaction():
@@ -49,6 +61,7 @@ def run_migrations_online() -> None:
             target_metadata=target_metadata,
             render_as_batch=True,
             user_module_prefix="app.models.",
+            include_name=include_name,
         )
         with context.begin_transaction():
             context.run_migrations()
