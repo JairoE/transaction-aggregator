@@ -114,18 +114,9 @@ def seeded_card(migrated_sqlite_path: str) -> dict[str, str]:
 
 
 @pytest.fixture
-async def db_session(settings_env: dict[str, str]) -> AsyncIterator[AsyncSession]:
-    from app.config import get_settings
-    from app.db import create_database
-
-    get_settings.cache_clear()
-    settings = get_settings()
-    database = create_database(settings)
-    await database.create_all()
+async def db_session(database) -> AsyncIterator[AsyncSession]:
     async with database.session() as session:
         yield session
-    await database.dispose()
-    get_settings.cache_clear()
 
 
 @pytest.fixture
@@ -145,11 +136,13 @@ async def database(settings_env: dict[str, str]):
 
 
 @pytest.fixture
-async def app(database):
+async def app(database, fake_plaid):
     from app.config import get_settings
     from app.main import create_app
 
-    return create_app(settings=get_settings(), database=database)
+    return create_app(
+        settings=get_settings(), database=database, plaid_gateway=fake_plaid
+    )
 
 
 @pytest.fixture
@@ -194,3 +187,71 @@ async def authenticated_client(client, login_response):
 @pytest.fixture
 async def csrf_token(login_response) -> str:
     return login_response.json()["csrf_token"]
+
+
+@pytest.fixture
+def fake_plaid():
+    from tests.fakes.plaid import FakePlaidGateway
+
+    return FakePlaidGateway()
+
+
+@pytest.fixture
+def token_cipher(settings_env: dict[str, str]):
+    from app.services.crypto import TokenCipher
+
+    return TokenCipher.from_base64_key(settings_env["TOKEN_ENCRYPTION_KEY"], 1)
+
+
+@pytest.fixture
+async def connection_service(db_session, fake_plaid, token_cipher):
+    from app.config import get_settings
+    from app.services.connection_service import ConnectionService
+
+    get_settings.cache_clear()
+    return ConnectionService(db_session, get_settings(), fake_plaid, token_cipher)
+
+
+@pytest.fixture
+async def production_connection_service(db_session, fake_plaid, token_cipher):
+    from app.config import Settings
+    from app.services.connection_service import ConnectionService
+
+    settings = Settings(
+        environment="production",
+        database_url="sqlite+aiosqlite:///:memory:",
+        application_secret="s" * 32,
+        token_encryption_key="k" * 43,
+        public_base_url="https://aggregator.example.com",
+        plaid_client_id="client",
+        plaid_secret="secret",
+    )
+    return ConnectionService(db_session, settings, fake_plaid, token_cipher)
+
+
+@pytest.fixture
+async def db_session_factory(database):
+    return database.session
+
+
+@pytest.fixture
+async def seed_production_tombstones(db_session):
+    from app.models import BankConnection, utcnow
+
+    async def _seed(owner_id: str, count: int) -> None:
+        for index in range(count):
+            db_session.add(
+                BankConnection(
+                    owner_id=owner_id,
+                    bank_slug="chase",
+                    institution_id=f"ins_seed_{index}",
+                    institution_name="Seeded",
+                    plaid_item_id=f"item-seed-{index}",
+                    plaid_environment="production",
+                    lifecycle_status="removed",
+                    removed_at=utcnow(),
+                )
+            )
+        await db_session.flush()
+
+    return _seed

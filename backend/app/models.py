@@ -36,7 +36,10 @@ class UtcDateTime(TypeDecorator[datetime]):
         if value is None:
             return None
         if value.tzinfo is None:
-            value = value.replace(tzinfo=UTC)
+            raise ValueError(
+                "naive datetimes cannot be stored; pass a timezone-aware value "
+                "(app.models.utcnow) so provider timestamps are never guessed"
+            )
         return value.astimezone(UTC).isoformat()
 
     def process_result_value(

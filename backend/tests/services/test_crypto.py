@@ -83,3 +83,13 @@ def test_decrypt_rejects_unknown_key_version() -> None:
                 key_version=9,
             )
         )
+
+
+def test_ciphertext_cannot_be_moved_between_records() -> None:
+    cipher = TokenCipher.from_base64_key(_key(), key_version=1)
+    encrypted = cipher.encrypt("access-capital-one", context="connection-a")
+
+    with pytest.raises(ValueError):
+        cipher.decrypt(encrypted, context="connection-b")
+
+    assert cipher.decrypt(encrypted, context="connection-a") == "access-capital-one"

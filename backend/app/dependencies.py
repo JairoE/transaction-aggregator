@@ -85,3 +85,22 @@ __all__ = [
     "require_owner",
     "require_session",
 ]
+
+
+def get_plaid_gateway(request: Request):  # type: ignore[no-untyped-def]
+    return request.app.state.plaid_gateway
+
+
+def get_token_cipher(request: Request):  # type: ignore[no-untyped-def]
+    return request.app.state.token_cipher
+
+
+async def connection_service_dep(request: Request, session: SessionDep):  # type: ignore[no-untyped-def]
+    from app.services.connection_service import ConnectionService
+
+    return ConnectionService(
+        session,
+        request.app.state.settings,
+        request.app.state.plaid_gateway,
+        request.app.state.token_cipher,
+    )

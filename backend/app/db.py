@@ -66,6 +66,19 @@ def _sqlite_file_path(database_url: str) -> Path | None:
     return Path(raw).expanduser()
 
 
+def restrict_sqlite_permissions(path: Path | None) -> None:
+    """Make the database and its sidecar files owner-readable only (SEC-011)."""
+
+    if path is None:
+        return
+    for candidate in (path, Path(f"{path}-wal"), Path(f"{path}-shm")):
+        try:
+            if candidate.exists():
+                os.chmod(candidate, 0o600)
+        except OSError:  # pragma: no cover - non-POSIX filesystems
+            pass
+
+
 def create_database(settings: Settings) -> Database:
     path = _sqlite_file_path(settings.database_url)
     if path is not None:
@@ -90,12 +103,11 @@ def create_database(settings: Settings) -> Database:
         cursor.execute("PRAGMA synchronous=NORMAL")
         cursor.execute("PRAGMA busy_timeout=30000")
         cursor.close()
-
-    if path is not None and path.exists():
-        try:
-            os.chmod(path, 0o600)
-        except OSError:  # pragma: no cover - non-POSIX filesystems
-            pass
+        # SQLAlchemy connects lazily, so the database file and its WAL/SHM
+        # sidecars only exist once a connection is opened. Tighten permissions
+        # here rather than at engine construction, where the file is absent on
+        # a fresh install and the umask would leave it world-readable.
+        restrict_sqlite_permissions(path)
 
     session_factory = async_sessionmaker(
         engine, expire_on_commit=False, class_=AsyncSession

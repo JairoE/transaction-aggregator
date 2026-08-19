@@ -51,12 +51,14 @@ class TokenCipher:
     def key_version(self) -> int:
         return self._key_version
 
-    def encrypt(self, value: str) -> EncryptedSecret:
+    def encrypt(self, value: str, context: str = "") -> EncryptedSecret:
         import os
 
         nonce = os.urandom(NONCE_BYTES)
         ciphertext = self._aesgcm.encrypt(
-            nonce, value.encode("utf-8"), self._associated_data(self._key_version)
+            nonce,
+            value.encode("utf-8"),
+            self._associated_data(self._key_version, context),
         )
         return EncryptedSecret(
             ciphertext=_b64(ciphertext),
@@ -64,7 +66,7 @@ class TokenCipher:
             key_version=self._key_version,
         )
 
-    def decrypt(self, secret: EncryptedSecret) -> str:
+    def decrypt(self, secret: EncryptedSecret, context: str = "") -> str:
         if secret.key_version != self._key_version:
             raise ValueError(
                 "encrypted secret was written with key version "
@@ -75,15 +77,24 @@ class TokenCipher:
             nonce = base64.urlsafe_b64decode(_pad(secret.nonce))
             ciphertext = base64.urlsafe_b64decode(_pad(secret.ciphertext))
             plaintext = self._aesgcm.decrypt(
-                nonce, ciphertext, self._associated_data(secret.key_version)
+                nonce,
+                ciphertext,
+                self._associated_data(secret.key_version, context),
             )
         except (InvalidTag, ValueError, TypeError) as error:
             raise ValueError("encrypted secret could not be decrypted") from error
         return plaintext.decode("utf-8")
 
     @staticmethod
-    def _associated_data(key_version: int) -> bytes:
-        return f"plaid-access-token:v{key_version}".encode("ascii")
+    def _associated_data(key_version: int, context: str) -> bytes:
+        """Bind ciphertext to its key version *and* the row that owns it.
+
+        Without the context an attacker with database write access could copy
+        one connection's ciphertext into another connection's row and the app
+        would decrypt it happily, using the wrong institution's token.
+        """
+
+        return f"plaid-access-token:v{key_version}:{context}".encode("utf-8")
 
 
 def _b64(raw: bytes) -> str:

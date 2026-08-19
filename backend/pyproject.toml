@@ -10,6 +10,7 @@ dependencies = [
   "fastapi>=0.116,<1",
   "httpx>=0.28,<1",
   "plaid-python>=38,<40",
+  "pyjwt[crypto]>=2.10,<3",
   "pydantic-settings>=2.10,<3",
   "pwdlib[argon2]>=0.2,<1",
   "sqlalchemy[asyncio]>=2.0.43,<3",
