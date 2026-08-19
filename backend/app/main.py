@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -17,6 +18,13 @@ from app.api import webhooks as webhooks_api
 from app.config import Settings, get_settings
 from app.db import Database, create_database
 from app.errors import AppError
+from app.logging import configure_logging
+from app.middleware import (
+    RequestContextMiddleware,
+    TrustedHostMiddleware,
+    build_content_security_policy,
+    mount_spa,
+)
 from app.services.crypto import TokenCipher
 from app.services.plaid_gateway import PlaidGateway
 
@@ -88,7 +96,19 @@ def create_app(
             if owns_database:
                 await app.state.database.dispose()
 
+    if resolved_settings.environment != "test":
+        configure_logging()
+
     app = FastAPI(title="Transaction Aggregator API", lifespan=lifespan)
+    app.add_middleware(
+        RequestContextMiddleware,
+        content_security_policy=build_content_security_policy(
+            allow_plaid=not resolved_settings.uses_fake_plaid
+        ),
+    )
+    app.add_middleware(
+        TrustedHostMiddleware, allowed_hosts=resolved_settings.trusted_host_list
+    )
     app.state.settings = resolved_settings
     app.state.plaid_gateway = plaid_gateway or build_plaid_gateway(resolved_settings)
     app.state.token_cipher = TokenCipher.from_base64_key(
@@ -126,6 +146,9 @@ def create_app(
     app.include_router(search_api.router)
     app.include_router(sync_api.router)
     app.include_router(webhooks_api.router)
+
+    # Mounted last so the SPA catch-all never shadows an API route.
+    mount_spa(app, Path(__file__).resolve().parents[2] / "frontend" / "dist")
 
     return app
 
