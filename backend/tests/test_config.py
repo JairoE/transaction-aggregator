@@ -21,7 +21,7 @@ def _env(**overrides: str) -> dict[str, str]:
 
 
 def test_settings_load_from_environment() -> None:
-    settings = Settings(**{k.lower(): v for k, v in _env().items()})
+    settings = Settings(_env_file=None, **{k.lower(): v for k, v in _env().items()})
 
     assert settings.environment == "test"
     assert settings.session_cookie_name == "ta_session"
@@ -34,18 +34,18 @@ def test_settings_require_plaid_credentials() -> None:
     del values["plaid_client_id"]
 
     with pytest.raises(ValidationError):
-        Settings(**values)
+        Settings(_env_file=None, **values)
 
 
 def test_settings_reject_short_application_secret() -> None:
     values = {k.lower(): v for k, v in _env(APPLICATION_SECRET="tooshort").items()}
 
     with pytest.raises(ValidationError):
-        Settings(**values)
+        Settings(_env_file=None, **values)
 
 
 def test_secrets_are_not_rendered_in_repr() -> None:
-    settings = Settings(**{k.lower(): v for k, v in _env().items()})
+    settings = Settings(_env_file=None, **{k.lower(): v for k, v in _env().items()})
 
     rendered = repr(settings)
 
@@ -62,7 +62,7 @@ def test_production_requires_https_public_base_url() -> None:
     }
 
     with pytest.raises(ValidationError):
-        Settings(**values)
+        Settings(_env_file=None, **values)
 
 
 def test_production_accepts_stable_https_public_base_url() -> None:
@@ -73,6 +73,6 @@ def test_production_accepts_stable_https_public_base_url() -> None:
         ).items()
     }
 
-    settings = Settings(**values)
+    settings = Settings(_env_file=None, **values)
 
     assert settings.environment == "production"

@@ -226,6 +226,7 @@ async def production_connection_service(db_session, fake_plaid, token_cipher):
     from app.services.connection_service import ConnectionService
 
     settings = Settings(
+        _env_file=None,
         environment="production",
         database_url="sqlite+aiosqlite:///:memory:",
         application_secret="s" * 32,

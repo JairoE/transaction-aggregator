@@ -14,6 +14,7 @@ from app.models import UtcDateTime, utcnow
 
 def _settings(tmp_path: Path) -> Settings:
     return Settings(
+        _env_file=None,
         environment="test",
         database_url=f"sqlite+aiosqlite:///{tmp_path / 'nested' / 'transactions.db'}",
         application_secret="s" * 32,

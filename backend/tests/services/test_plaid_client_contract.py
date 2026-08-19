@@ -17,6 +17,7 @@ from app.config import Settings
 @pytest.fixture
 def production_settings() -> Settings:
     return Settings(
+        _env_file=None,
         environment="sandbox",
         database_url="sqlite+aiosqlite:///:memory:",
         application_secret="s" * 32,
