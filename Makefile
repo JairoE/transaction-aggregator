@@ -18,7 +18,7 @@ dev:
 	pnpm --dir frontend dev
 
 serve:
-	uv run --directory backend uvicorn app.main:app --host 127.0.0.1 --port 8000
+	uv run --directory backend uvicorn --factory app.main:create_app --host 127.0.0.1 --port 8000
 
 e2e:
 	pnpm --dir frontend e2e

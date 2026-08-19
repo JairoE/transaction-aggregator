@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
+from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 BACKEND_ROOT = Path(__file__).resolve().parents[1]
@@ -125,3 +126,71 @@ async def db_session(settings_env: dict[str, str]) -> AsyncIterator[AsyncSession
         yield session
     await database.dispose()
     get_settings.cache_clear()
+
+
+@pytest.fixture
+async def database(settings_env: dict[str, str]):
+    from app.config import get_settings
+    from app.db import create_database
+
+    get_settings.cache_clear()
+    settings = get_settings()
+    database = create_database(settings)
+    await database.create_all()
+    try:
+        yield database
+    finally:
+        await database.dispose()
+        get_settings.cache_clear()
+
+
+@pytest.fixture
+async def app(database):
+    from app.config import get_settings
+    from app.main import create_app
+
+    return create_app(settings=get_settings(), database=database)
+
+
+@pytest.fixture
+async def client(app) -> AsyncIterator["AsyncClient"]:
+    from httpx import ASGITransport, AsyncClient
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app),
+        base_url="http://127.0.0.1:8000",
+    ) as http_client:
+        yield http_client
+
+
+@pytest.fixture
+async def owner(database):
+    from app.services import auth as auth_service
+
+    async with database.session() as session:
+        created = await auth_service.create_owner(
+            session, "owner@example.com", "correct horse battery staple"
+        )
+        await session.commit()
+        await session.refresh(created)
+        return created
+
+
+@pytest.fixture
+async def login_response(client, owner):
+    response = await client.post(
+        "/api/auth/login",
+        json={"email": owner.email, "password": "correct horse battery staple"},
+    )
+    assert response.status_code == 200, response.text
+    return response
+
+
+@pytest.fixture
+async def authenticated_client(client, login_response):
+    return client
+
+
+@pytest.fixture
+async def csrf_token(login_response) -> str:
+    return login_response.json()["csrf_token"]
