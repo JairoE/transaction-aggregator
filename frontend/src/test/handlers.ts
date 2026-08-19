@@ -37,6 +37,7 @@ export function makeBank(
     last_provider_update_at: null,
     last_successful_sync_at: null,
     lifecycle_status: 'disconnected',
+    message: 'Not connected.',
     refresh_supported: true,
     state: 'disconnected',
     ...overrides,
@@ -58,11 +59,22 @@ export function makeConnectionsResponse(
   }
 }
 
-/** Anonymous visitor: no owner session. Individual tests layer on top. */
+/**
+ * Anonymous visitor: no owner session. Individual tests layer on top.
+ *
+ * The default `/api/connections` response (four disconnected banks, no
+ * attention needed) exists so specs that never touch bank connections —
+ * most dashboard specs — don't have to mock an endpoint they don't care
+ * about. `onUnhandledRequest: 'error'` in `./setup.ts` means any request
+ * without a matching handler fails the test, and `DashboardPage` now reads
+ * `/api/connections` (for `CacheStatusBanner`) on every render. Tests that
+ * do care about connection health override this via `connectionsHandler(...)`.
+ */
 export const handlers = [
   http.get('/api/auth/session', () =>
     HttpResponse.json({ code: 'AUTH_REQUIRED', message: 'Sign in to continue.' }, { status: 401 }),
   ),
+  http.get('/api/connections', () => HttpResponse.json(makeConnectionsResponse())),
 ]
 
 export function authenticatedSessionHandler() {

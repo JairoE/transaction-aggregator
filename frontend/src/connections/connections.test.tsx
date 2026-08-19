@@ -475,6 +475,7 @@ describe('bank connections', () => {
       last_provider_update_at: null,
       last_successful_sync_at: null,
       lifecycle_status: 'disconnected',
+      message: 'Not connected.',
       refresh_supported: true,
       state: 'disconnected',
     }

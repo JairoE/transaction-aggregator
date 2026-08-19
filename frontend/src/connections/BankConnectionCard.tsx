@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactElement } from 'rea
 import { ApiError, apiClient } from '../api/client'
 import type { components } from '../api/generated'
 import { CheckIcon, DotIcon, ExternalLinkIcon, WarningIcon } from '../shell/icons'
+import { useOnlineStatus } from '../shell/useOnlineStatus'
 import { BANKS_BY_SLUG } from './banks'
+import { ConnectionNotice, toConnectionAction, toConnectionState } from './ConnectionNotice'
 import { DemoBankDialog } from './DemoBankDialog'
 import { continuationExpiry, clearLinkContinuation, saveLinkContinuation } from './linkContinuation'
 import { PlaidLinkLauncher } from './PlaidLinkLauncher'
@@ -41,6 +43,9 @@ export function BankConnectionCard({
   const meta = BANKS_BY_SLUG[bank.bank]
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const previouslyFocused = useRef<HTMLElement | null>(null)
+  const isOnline = useOnlineStatus()
+  const connectionState = toConnectionState(bank.state)
+  const connectionAction = toConnectionAction(bank.action)
 
   const restoreFocus = useCallback(() => {
     previouslyFocused.current?.focus?.()
@@ -114,7 +119,10 @@ export function BankConnectionCard({
     [bank.bank, meta.demoInstitutionId, meta.displayName, onChanged, restoreFocus],
   )
 
-  const finishReconnect = useCallback(async () => {
+  /** Triggers a sync and returns to idle — used both to finish a
+   * successful update-mode reconnect/consent-renewal (real or demo) and as
+   * the direct "Sync now" action for a merely stale or degraded bank. */
+  const triggerSync = useCallback(async () => {
     setPhase({ kind: 'finishing' })
     try {
       if (bank.connection_id) {
@@ -133,6 +141,21 @@ export function BankConnectionCard({
     }
   }, [bank.connection_id, onChanged, restoreFocus])
 
+  // While the backend classifies this connection as actively syncing, keep
+  // polling the connections list so the card observes the follow-on
+  // transition to `ready` (or back to a failure state) instead of getting
+  // stuck showing "syncing" forever once the one `onChanged()` from
+  // `triggerSync` has already fired.
+  useEffect(() => {
+    if (connectionState !== 'syncing') {
+      return
+    }
+    const timer = window.setInterval(() => {
+      onChanged()
+    }, 400)
+    return () => window.clearInterval(timer)
+  }, [connectionState, onChanged])
+
   function handleConnectClick() {
     void requestLinkToken('new', false)
   }
@@ -143,6 +166,16 @@ export function BankConnectionCard({
 
   function handleReconnectClick() {
     void requestLinkToken('update', false)
+  }
+
+  /** Dispatches the `ConnectionNotice` action button to whichever flow the
+   * backend-classified `action` calls for. */
+  function handleNoticeAction() {
+    if (connectionAction === 'sync') {
+      void triggerSync()
+    } else if (connectionAction === 'reconnect' || connectionAction === 'renew_consent') {
+      void requestLinkToken('update', false)
+    }
   }
 
   function handleCancelApproval() {
@@ -158,7 +191,7 @@ export function BankConnectionCard({
       return
     }
     if (phase.mode === 'update') {
-      void finishReconnect()
+      void triggerSync()
       return
     }
     void finishExchange(`public-demo-${bank.bank}`)
@@ -167,7 +200,7 @@ export function BankConnectionCard({
   function handlePlaidSuccess(publicToken: string, institutionId: string, institutionName: string) {
     clearLinkContinuation(ownerId)
     if (phase.kind === 'awaiting-approval' && phase.mode === 'update') {
-      void finishReconnect()
+      void triggerSync()
       return
     }
     void finishExchange(publicToken, institutionId, institutionName)
@@ -225,6 +258,13 @@ export function BankConnectionCard({
         </span>
       </div>
 
+      <ConnectionNotice
+        bank={bank}
+        disabled={!isOnline}
+        busy={busy}
+        onAction={handleNoticeAction}
+      />
+
       {phase.kind === 'error' && (
         <p role="alert" className="bank-card__error">
           {phase.message}
@@ -238,7 +278,12 @@ export function BankConnectionCard({
             slots.
           </p>
           <div className="trial-confirm__actions">
-            <button type="button" className="primary-button" onClick={handleConfirmTrialSlot}>
+            <button
+              type="button"
+              className="primary-button"
+              onClick={handleConfirmTrialSlot}
+              disabled={!isOnline}
+            >
               Confirm &amp; continue
             </button>
             <button type="button" onClick={() => setPhase({ kind: 'idle' })}>
@@ -254,7 +299,7 @@ export function BankConnectionCard({
             type="button"
             className="primary-button"
             onClick={handleConnectClick}
-            disabled={busy || phase.kind === 'confirm-trial-slot'}
+            disabled={busy || phase.kind === 'confirm-trial-slot' || !isOnline}
           >
             {busy ? (
               'Connecting…'
@@ -272,17 +317,19 @@ export function BankConnectionCard({
               <CheckIcon />
               <span>Connected</span>
             </button>
-            <button
-              type="button"
-              onClick={handleReconnectClick}
-              disabled={busy || phase.kind === 'disconnecting'}
-            >
-              Reconnect
-            </button>
+            {connectionAction === 'none' && (
+              <button
+                type="button"
+                onClick={handleReconnectClick}
+                disabled={busy || phase.kind === 'disconnecting' || !isOnline}
+              >
+                Reconnect
+              </button>
+            )}
             <button
               type="button"
               onClick={() => void handleDisconnect()}
-              disabled={busy || phase.kind === 'disconnecting'}
+              disabled={busy || phase.kind === 'disconnecting' || !isOnline}
             >
               {phase.kind === 'disconnecting' ? 'Disconnecting…' : 'Disconnect'}
             </button>

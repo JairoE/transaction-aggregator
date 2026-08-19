@@ -405,6 +405,56 @@ input:focus-visible {
   color: var(--color-text-muted);
 }
 
+/* ---------- Connection recovery notice ---------- */
+
+.connection-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-top: 0.85rem;
+  padding: 0.75rem;
+  border-radius: var(--radius);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-strong);
+}
+
+.connection-notice svg {
+  flex-shrink: 0;
+  margin-top: 0.15rem;
+  color: #9a6b00;
+}
+
+.connection-notice--danger {
+  background: var(--color-danger-surface);
+  border-color: var(--color-danger);
+}
+
+.connection-notice--danger svg {
+  color: var(--color-danger);
+}
+
+.connection-notice__body {
+  flex: 1 1 auto;
+}
+
+.connection-notice__message {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.connection-notice__timestamp {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.connection-notice__action {
+  flex-shrink: 0;
+  align-self: center;
+  background: var(--color-surface-strong);
+}
+
 /* ---------- Demo bank dialog ---------- */
 
 .demo-dialog-overlay {
@@ -563,6 +613,44 @@ input:focus-visible {
   border-color: transparent;
   padding: 0.4rem 0.6rem;
   min-height: auto;
+}
+
+.cache-status-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+}
+
+.cache-status-banner__line {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text);
+}
+
+.cache-status-banner__line svg {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+}
+
+.cache-status-banner__line--offline svg {
+  color: var(--color-accent);
+}
+
+.cache-status-banner__line--attention svg {
+  color: #9a6b00;
+}
+
+.cache-status-banner a {
+  color: var(--color-accent);
+  font-weight: 600;
 }
 
 .card-grid {

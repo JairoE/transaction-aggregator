@@ -1,13 +1,21 @@
 import { useEffect, useMemo, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { apiClient } from '../api/client'
+import type { components } from '../api/generated'
 import { useAuth } from '../auth/AuthProvider'
+import { CONNECTIONS_QUERY_KEY } from '../connections/ConnectionsPage'
 import { AppShell } from '../shell/AppShell'
 import { DotIcon } from '../shell/icons'
+import { useOnlineStatus } from '../shell/useOnlineStatus'
+import { CacheStatusBanner } from './CacheStatusBanner'
 import { CardGrid, type DashboardCardGroup } from './CardGrid'
 import { SearchBar } from './SearchBar'
 import { SearchQueryProvider } from './SearchContext'
 import { fetchCardTransactions, fetchTransactionSearch } from './api'
 import { buildFleetSummary, buildResultsSummary, formatSyncStatus } from './format'
+import { persistSearchResult, readPersistedSearchResult } from './searchCache'
+
+type ConnectionsResponse = components['schemas']['ConnectionsResponse']
 
 interface CardPageState {
   /** Transactions appended by "Load more" clicks, beyond the base page. */
@@ -18,14 +26,40 @@ interface CardPageState {
 
 export function DashboardPage() {
   const { owner } = useAuth()
+  const isOnline = useOnlineStatus()
   const [submittedQuery, setSubmittedQuery] = useState('')
   const [pageState, setPageState] = useState<Record<string, CardPageState>>({})
+
+  // Connection health for `CacheStatusBanner`. Shares its query key with
+  // `ConnectionsPage` so navigating between the two screens doesn't
+  // duplicate the request.
+  const connectionsQuery = useQuery({
+    queryKey: CONNECTIONS_QUERY_KEY,
+    queryFn: () => apiClient.request<ConnectionsResponse>('/api/connections'),
+  })
 
   const searchQuery = useQuery({
     queryKey: ['transactions', 'search', submittedQuery] as const,
     queryFn: () => fetchTransactionSearch(submittedQuery),
     placeholderData: keepPreviousData,
+    // Offline: don't attempt a doomed fetch — fall back to whatever is
+    // already cached (in memory, or hydrated below from sessionStorage)
+    // and let the `online` event re-enable fetching automatically.
+    enabled: isOnline,
+    initialData: () =>
+      owner ? readPersistedSearchResult(owner.id, submittedQuery)?.data : undefined,
+    initialDataUpdatedAt: () =>
+      owner ? readPersistedSearchResult(owner.id, submittedQuery)?.cachedAt : undefined,
   })
+
+  // Persist every successful search result to sessionStorage (see
+  // `./searchCache.ts`) so a reload — or simply going offline — still has
+  // last-known-good rows to show instead of a blank/loading dashboard.
+  useEffect(() => {
+    if (owner && searchQuery.isSuccess && searchQuery.data) {
+      persistSearchResult(owner.id, submittedQuery, searchQuery.data)
+    }
+  }, [owner, searchQuery.isSuccess, searchQuery.data, submittedQuery])
 
   // A newly submitted search — including an empty one that restores recent
   // cached transactions — resets every card's pagination state so no stale
@@ -97,6 +131,12 @@ export function DashboardPage() {
           initialQuery={submittedQuery}
           pending={searchQuery.isFetching}
           onSubmit={setSubmittedQuery}
+        />
+
+        <CacheStatusBanner
+          banks={connectionsQuery.data?.banks ?? []}
+          cacheAsOf={searchQuery.data?.cache_as_of ?? null}
+          isOnline={isOnline}
         />
 
         <div className="dashboard-page__meta">

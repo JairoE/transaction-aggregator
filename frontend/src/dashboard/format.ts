@@ -58,6 +58,19 @@ export function formatSyncStatus(cacheAsOf: string | null, now: Date = new Date(
   return `Synced ${diffDays}d ago`
 }
 
+/**
+ * An exact, locale-formatted moment — "Aug 19, 2026, 10:00 AM" — for the
+ * places a relative label like `formatSyncStatus`'s "58m ago" would be too
+ * vague: a stale bank connection or an offline banner both need to show
+ * precisely which cached snapshot the owner is looking at.
+ */
+export function formatExactTimestamp(isoTimestamp: string): string {
+  return new Intl.DateTimeFormat(locale(), {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(isoTimestamp))
+}
+
 /** "8 cards · 4 banks" eyebrow line above the grid. */
 export function buildFleetSummary(cardCount: number, bankCount: number): string {
   const cardWord = cardCount === 1 ? 'card' : 'cards'
