@@ -11,6 +11,8 @@ from fastapi.responses import JSONResponse
 
 from app.api import auth as auth_api
 from app.api import connections as connections_api
+from app.api import sync as sync_api
+from app.api import webhooks as webhooks_api
 from app.config import Settings, get_settings
 from app.db import Database, create_database
 from app.errors import AppError
@@ -40,12 +42,48 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        import asyncio
+
+        from app.services.sync_service import enqueue_stale_connections
+        from app.services.sync_worker import SyncWorker
+
         owns_database = database is None
         app.state.database = database or create_database(resolved_settings)
         await app.state.database.verify_fts5_trigram()
+
+        tasks: list[asyncio.Task[None]] = []
+        worker: SyncWorker | None = None
+        if resolved_settings.enable_background_worker:
+            worker = SyncWorker(
+                app.state.database, app.state.plaid_gateway, app.state.token_cipher
+            )
+            app.state.sync_worker = worker
+            # Startup recovery: anything not synced within the window is queued.
+            async with app.state.database.session() as session:
+                await enqueue_stale_connections(
+                    session,
+                    stale_after_minutes=resolved_settings.sync_interval_minutes,
+                    trigger="startup",
+                )
+                await session.commit()
+            tasks.append(asyncio.create_task(worker.run_forever()))
+            tasks.append(
+                asyncio.create_task(
+                    worker.run_scheduler(resolved_settings.sync_interval_minutes)
+                )
+            )
         try:
             yield
         finally:
+            if worker is not None:
+                worker.stop()
+            for task in tasks:
+                task.cancel()
+            for task in tasks:
+                try:
+                    await task
+                except (asyncio.CancelledError, Exception):
+                    pass
             if owns_database:
                 await app.state.database.dispose()
 
@@ -84,6 +122,8 @@ def create_app(
 
     app.include_router(auth_api.router)
     app.include_router(connections_api.router)
+    app.include_router(sync_api.router)
+    app.include_router(webhooks_api.router)
 
     return app
 

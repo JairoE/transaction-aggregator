@@ -31,6 +31,7 @@ def settings_env(tmp_path: Path, token_encryption_key: str) -> Iterator[dict[str
         "PUBLIC_BASE_URL": "http://127.0.0.1:8000",
         "PLAID_CLIENT_ID": "test-client-id",
         "PLAID_SECRET": "test-plaid-secret",
+        "ENABLE_BACKGROUND_WORKER": "false",
     }
     previous = {key: os.environ.get(key) for key in values}
     os.environ.update(values)
@@ -255,3 +256,85 @@ async def seed_production_tombstones(db_session):
         await db_session.flush()
 
     return _seed
+
+
+@pytest.fixture
+async def connected_connection(db_session, owner, fake_plaid, token_cipher):
+    """An active Capital One connection with two discovered credit cards."""
+
+    from app.config import get_settings
+    from app.services.connection_service import ConnectionService
+
+    get_settings.cache_clear()
+    service = ConnectionService(db_session, get_settings(), fake_plaid, token_cipher)
+    connection = await service.exchange_public_token(
+        owner, "capital-one", "public-conn-1", "ins_128026", "Capital One"
+    )
+    await db_session.commit()
+
+    class _Handle:
+        id = connection.id
+        access_token = f"access-sandbox-public-conn-1-1"
+
+    return _Handle()
+
+
+@pytest.fixture
+async def second_connection(db_session, owner, fake_plaid, token_cipher, connected_connection):
+    from app.config import get_settings
+    from app.services.connection_service import ConnectionService
+    from tests.fakes.plaid import credit_card
+
+    get_settings.cache_clear()
+    fake_plaid.accounts_by_token["access-sandbox-public-conn-2-2"] = [
+        credit_card("acct-credit-3", "Sapphire Preferred", "1187"),
+    ]
+    service = ConnectionService(db_session, get_settings(), fake_plaid, token_cipher)
+    connection = await service.exchange_public_token(
+        owner, "chase", "public-conn-2", "ins_3", "Chase"
+    )
+    await db_session.commit()
+
+    class _Handle:
+        id = connection.id
+        access_token = "access-sandbox-public-conn-2-2"
+
+    return _Handle()
+
+
+@pytest.fixture
+async def sync_service(db_session, fake_plaid, token_cipher):
+    from app.services.sync_service import SyncService
+
+    return SyncService(db_session, fake_plaid, token_cipher)
+
+
+@pytest.fixture
+async def sync_worker(database, fake_plaid, token_cipher):
+    from app.services.sync_worker import SyncWorker
+
+    return SyncWorker(database, fake_plaid, token_cipher)
+
+
+@pytest.fixture
+async def drained_initial_job(db_session, connected_connection):
+    """Mark the connection's automatic initial job complete."""
+
+    from sqlalchemy import update
+
+    from app.models import SyncJob, utcnow
+
+    await db_session.execute(
+        update(SyncJob)
+        .where(SyncJob.connection_id == connected_connection.id)
+        .values(state="succeeded", finished_at=utcnow())
+    )
+    await db_session.commit()
+
+
+@pytest.fixture
+async def connected_item_id(db_session, connected_connection) -> str:
+    from app.models import BankConnection
+
+    connection = await db_session.get(BankConnection, connected_connection.id)
+    return connection.plaid_item_id

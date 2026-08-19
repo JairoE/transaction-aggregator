@@ -86,6 +86,14 @@ class ConnectionService:
         self._cipher = cipher
         self._banks = load_supported_banks(settings.plaid_institution_overrides)
 
+    @property
+    def gateway(self) -> PlaidGateway:
+        return self._gateway
+
+    @property
+    def cipher(self) -> TokenCipher:
+        return self._cipher
+
     # --- reads ------------------------------------------------------------
     async def list_connections(self, owner: Owner) -> ConnectionsSummary:
         rows = (
