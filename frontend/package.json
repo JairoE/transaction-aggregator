@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "generate:api": "uv run --directory ../backend python -m app.openapi_export > src/api/openapi.json && openapi-typescript src/api/openapi.json -o src/api/generated.ts"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.62.0",
@@ -32,6 +33,7 @@
     "axe-core": "^4.10.2",
     "jsdom": "^25.0.1",
     "msw": "^2.7.0",
+    "openapi-typescript": "^7",
     "typescript": "^5.7.2",
     "vite": "^6.0.5",
     "vitest": "^3.2.7"
