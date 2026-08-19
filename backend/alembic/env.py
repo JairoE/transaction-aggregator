@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
@@ -16,12 +17,25 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 
+def _ensure_sqlite_directory(url: str) -> str:
+    """Create the parent directory so a first migration works on a fresh clone."""
+
+    marker = "sqlite+pysqlite:///"
+    if url.startswith(marker):
+        raw = url[len(marker) :]
+        if raw and raw != ":memory:":
+            Path(raw).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    return url
+
+
 def _database_url() -> str:
     override = config.get_main_option("sqlalchemy.url")
     env_url = os.environ.get("DATABASE_URL")
     if env_url:
-        return env_url.replace("sqlite+aiosqlite://", "sqlite+pysqlite://")
-    return override
+        return _ensure_sqlite_directory(
+            env_url.replace("sqlite+aiosqlite://", "sqlite+pysqlite://")
+        )
+    return _ensure_sqlite_directory(override)
 
 
 # The FTS5 index and its shadow tables are created by raw DDL in migration

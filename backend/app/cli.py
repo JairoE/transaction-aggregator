@@ -49,6 +49,11 @@ def main(argv: list[str] | None = None) -> int:
 
     create = commands.add_parser("create-owner", help="Create the single owner account")
     create.add_argument("--email", required=True)
+    create.add_argument(
+        "--password-stdin",
+        action="store_true",
+        help="Read the password from stdin instead of prompting (for scripts).",
+    )
 
     commands.add_parser("generate-keys", help="Print fresh local secrets")
 
@@ -60,7 +65,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"TOKEN_ENCRYPTION_KEY={key}")
         return 0
 
-    password = _prompt_password()
+    if getattr(args, "password_stdin", False):
+        password = sys.stdin.readline().rstrip("\n")
+        if len(password) < auth_service.MINIMUM_PASSWORD_LENGTH:
+            print(
+                f"Password must be at least {auth_service.MINIMUM_PASSWORD_LENGTH} "
+                "characters.",
+                file=sys.stderr,
+            )
+            return 1
+    else:
+        password = _prompt_password()
     try:
         email = asyncio.run(_create_owner(args.email, password))
     except auth_service.OwnerAlreadyExistsError:
