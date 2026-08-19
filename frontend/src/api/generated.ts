@@ -280,6 +280,11 @@ export interface components {
             last_successful_sync_at: string | null;
             /** Lifecycle Status */
             lifecycle_status: string;
+            /**
+             * Message
+             * @default Not connected.
+             */
+            message: string;
             /** Refresh Supported */
             refresh_supported: boolean;
             /**

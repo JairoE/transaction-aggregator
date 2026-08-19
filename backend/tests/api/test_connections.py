@@ -195,3 +195,60 @@ async def test_no_response_or_log_contains_an_access_token(
     assert "access-sandbox" not in bodies
     assert "access-sandbox" not in caplog.text
     assert "public-e" not in bodies
+
+
+async def test_connections_expose_health_state_for_every_bank(
+    authenticated_client: AsyncClient, csrf_token: str
+) -> None:
+    await _exchange(
+        authenticated_client, csrf_token, "chase", "ins_3", "Chase", "public-health"
+    )
+
+    body = (await authenticated_client.get("/api/connections")).json()
+
+    chase = next(bank for bank in body["banks"] if bank["bank"] == "chase")
+    citi = next(bank for bank in body["banks"] if bank["bank"] == "citi")
+    # The exchange queues an initial job, so Chase is syncing, not ready.
+    assert chase["state"] == "syncing"
+    assert chase["action"] == "none"
+    assert chase["message"]
+    assert citi["state"] == "disconnected"
+
+
+async def test_a_failing_bank_does_not_hide_a_healthy_one(
+    authenticated_client: AsyncClient, csrf_token: str, db_session, fake_plaid
+) -> None:
+    from sqlalchemy import select, update
+
+    fake_plaid.shared_default_accounts = False
+
+    from app.models import BankConnection, SyncJob, utcnow
+
+    await _exchange(
+        authenticated_client, csrf_token, "chase", "ins_3", "Chase", "public-ok"
+    )
+    await _exchange(
+        authenticated_client, csrf_token, "citi", "ins_5", "Citi", "public-bad"
+    )
+    await db_session.execute(update(SyncJob).values(state="succeeded"))
+    await db_session.execute(
+        update(BankConnection).values(last_successful_sync_at=utcnow())
+    )
+    broken = (
+        await db_session.execute(
+            select(BankConnection).where(BankConnection.bank_slug == "citi")
+        )
+    ).scalars().one()
+    broken.last_error_code = "ITEM_LOGIN_REQUIRED"
+    await db_session.commit()
+
+    body = (await authenticated_client.get("/api/connections")).json()
+
+    chase = next(bank for bank in body["banks"] if bank["bank"] == "chase")
+    citi = next(bank for bank in body["banks"] if bank["bank"] == "citi")
+    assert chase["state"] == "ready"
+    assert chase["card_count"] == 2
+    assert citi["state"] == "needs_reconnect"
+    assert citi["action"] == "reconnect"
+    assert citi["card_count"] == 2, "cached cards remain visible"
+    assert "ITEM_LOGIN_REQUIRED" not in citi["message"]

@@ -61,6 +61,7 @@ class BankConnectionResponse(BaseModel):
     lifecycle_status: str
     state: str = "disconnected"
     action: str = "none"
+    message: str = "Not connected."
     cache_as_of: datetime | None = None
     last_successful_sync_at: datetime | None
     last_provider_update_at: datetime | None

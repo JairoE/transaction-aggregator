@@ -115,6 +115,11 @@
             "title": "Lifecycle Status",
             "type": "string"
           },
+          "message": {
+            "default": "Not connected.",
+            "title": "Message",
+            "type": "string"
+          },
           "refresh_supported": {
             "title": "Refresh Supported",
             "type": "boolean"

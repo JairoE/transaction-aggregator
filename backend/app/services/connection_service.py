@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings
 from app.errors import AppError, NotFoundError
+from app.services.connection_health import classify_connection_health
 from app.models import (
     BankConnection,
     CardAccount,
@@ -57,6 +58,10 @@ class BankSummary:
     institution_name: str | None
     card_count: int
     lifecycle_status: str
+    state: str
+    action: str
+    message: str
+    cache_as_of: datetime | None
     last_successful_sync_at: datetime | None
     last_provider_update_at: datetime | None
     consent_expiration_at: datetime | None
@@ -105,6 +110,16 @@ class ConnectionService:
         ).scalars().all()
         active_by_slug = {row.bank_slug: row for row in rows}
 
+        active_job_connection_ids = set(
+            (
+                await self._session.execute(
+                    select(SyncJob.connection_id).where(
+                        SyncJob.state.in_(("queued", "running"))
+                    )
+                )
+            ).scalars().all()
+        )
+
         card_counts = dict(
             (
                 await self._session.execute(
@@ -118,8 +133,20 @@ class ConnectionService:
         banks: list[BankSummary] = []
         for slug, bank in self._banks.items():
             connection = active_by_slug.get(slug)
+            health = (
+                classify_connection_health(
+                    connection,
+                    has_active_job=connection.id in active_job_connection_ids,
+                )
+                if connection is not None
+                else None
+            )
             banks.append(
                 BankSummary(
+                    state=health.state if health else "disconnected",
+                    action=health.action if health else "none",
+                    message=health.message if health else "Not connected.",
+                    cache_as_of=health.cache_as_of if health else None,
                     bank=slug,
                     display_name=bank.display_name,
                     connected=connection is not None,

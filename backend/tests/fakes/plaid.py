@@ -85,6 +85,7 @@ class FakePlaidGateway:
     created_users: list[str] = field(default_factory=list)
 
     refresh_supported: bool = True
+    shared_default_accounts: bool = True
     webhook_valid: bool = True
     exchange_error: PlaidGatewayError | None = None
     accounts_error: PlaidGatewayError | None = None
@@ -121,7 +122,19 @@ class FakePlaidGateway:
     def get_accounts(self, access_token: str) -> list[PlaidAccount]:
         if self.accounts_error is not None:
             raise self.accounts_error
-        return list(self.accounts_by_token.get(access_token, self.default_accounts()))
+        scripted = self.accounts_by_token.get(access_token)
+        if scripted is not None:
+            return list(scripted)
+        if self.shared_default_accounts:
+            return self.default_accounts()
+        # Plaid account ids are globally unique, so distinct Items must not
+        # reuse them; derive a stable suffix from the token.
+        suffix = access_token.rsplit("-", 1)[-1]
+        return [
+            credit_card(f"acct-credit-1-{suffix}", "Venture", "4812"),
+            credit_card(f"acct-credit-2-{suffix}", "Savor", "9064"),
+            checking(f"acct-checking-1-{suffix}"),
+        ]
 
     def get_item_status(self, access_token: str) -> ItemStatus:
         return self.item_statuses.get(
