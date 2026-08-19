@@ -246,6 +246,18 @@ class ConnectionService:
         supported = self._require_bank(bank)
         await self._reject_existing_active_connection(owner.id, supported)
 
+        # The Trial cap is enforced here as well as at link-token issuance:
+        # two tokens can be issued while the count is 9, and only the exchange
+        # actually consumes a slot.
+        if self._settings.environment == "production":
+            if await self._production_item_count(owner.id) >= TRIAL_ITEM_LIMIT:
+                raise AppError(
+                    "TRIAL_LIMIT_REACHED",
+                    "All 10 Plaid Trial Item slots have been used. Removing a "
+                    "connection does not return a slot.",
+                    409,
+                )
+
         exchanged = self._gateway.exchange_public_token(public_token)
         linked_institution = exchanged.institution_id or institution_id
 

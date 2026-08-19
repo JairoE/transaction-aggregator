@@ -140,3 +140,40 @@ async def test_unsupported_refresh_disables_the_capability(
     await db_session.refresh(connection)
 
     assert connection.refresh_supported is False
+
+
+async def test_failed_attempt_still_records_a_sync_run(
+    sync_worker, database, db_session, connected_connection, fake_plaid
+) -> None:
+    """The service records failures on a session the worker rolls back."""
+
+    from app.models import SyncRun
+    from app.services.sync_service import enqueue_sync
+
+    await enqueue_sync(db_session, connected_connection.id, "manual")
+    await db_session.commit()
+
+    fake_plaid.sync_error = PlaidGatewayError("INSTITUTION_DOWN", "transient")
+    await sync_worker.run_once()
+
+    async with database.session() as session:
+        runs = (await session.execute(select(SyncRun))).scalars().all()
+
+    assert len(runs) == 1
+    assert runs[0].outcome == "failed"
+    assert runs[0].error_code == "INSTITUTION_DOWN"
+
+
+async def test_a_running_job_cannot_be_claimed_twice(
+    sync_worker, db_session, connected_connection
+) -> None:
+    from app.services.sync_service import enqueue_sync
+
+    await enqueue_sync(db_session, connected_connection.id, "manual")
+    await db_session.commit()
+
+    first = await sync_worker._claim_next_job()
+    second = await sync_worker._claim_next_job()
+
+    assert first is not None
+    assert second is None

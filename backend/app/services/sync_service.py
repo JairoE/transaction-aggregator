@@ -339,7 +339,8 @@ class SyncService:
 
         for key, value in values.items():
             setattr(existing, key, value)
-        return not inserted or True
+        # A re-delivered "added" row is not a new row; only count real changes.
+        return not inserted
 
     async def _remove(self, transaction_ids: list[str]) -> int:
         result = await self._session.execute(

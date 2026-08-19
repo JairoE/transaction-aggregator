@@ -11,11 +11,11 @@ import asyncio
 import logging
 from datetime import timedelta
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.db import Database
 from app.errors import AppError
-from app.models import BankConnection, SyncJob, utcnow
+from app.models import BankConnection, SyncJob, SyncRun, utcnow
 from app.services.crypto import TokenCipher
 from app.services.plaid_gateway import PlaidGateway, PlaidGatewayError
 from app.services.sync_service import (
@@ -72,24 +72,42 @@ class SyncWorker:
             return True
 
     async def _claim_next_job(self) -> str | None:
+        """Claim one due job with a conditional UPDATE.
+
+        SQLAlchemy silently drops FOR UPDATE on SQLite, so the claim is made
+        atomic by an UPDATE guarded on the state we read; a losing claimant
+        simply sees rowcount 0 and moves on.
+        """
+
         async with self._database.session() as session:
-            job = (
+            candidate = (
                 await session.execute(
-                    select(SyncJob)
+                    select(SyncJob.id)
                     .where(SyncJob.state == "queued")
                     .where(SyncJob.run_after <= utcnow())
                     .order_by(SyncJob.run_after, SyncJob.created_at)
                     .limit(1)
-                    .with_for_update()
                 )
             ).scalars().first()
-            if job is None:
+            if candidate is None:
                 return None
-            job.state = "running"
-            job.started_at = utcnow()
-            job.attempts += 1
+
+            claimed = await session.execute(
+                update(SyncJob)
+                .where(SyncJob.id == candidate)
+                .where(SyncJob.state == "queued")
+                .values(
+                    state="running",
+                    started_at=utcnow(),
+                    attempts=SyncJob.attempts + 1,
+                    updated_at=utcnow(),
+                )
+            )
+            if not claimed.rowcount:
+                await session.rollback()
+                return None
             await session.commit()
-            return job.id
+            return candidate
 
     async def _record_failure(self, job_id: str, error: Exception) -> None:
         code = getattr(error, "error_code", None) or getattr(error, "code", "UNKNOWN")
@@ -117,6 +135,21 @@ class SyncWorker:
             if connection is not None:
                 connection.last_error_code = code
                 connection.last_error_at = utcnow()
+                # SyncService records this on its own session, which is rolled
+                # back when synchronize() raises, so the audit row is written
+                # here where it is committed.
+                session.add(
+                    SyncRun(
+                        connection_id=connection.id,
+                        job_id=job.id,
+                        starting_cursor=connection.sync_cursor,
+                        ending_cursor=None,
+                        outcome="failed",
+                        error_code=code,
+                        started_at=job.started_at or utcnow(),
+                        finished_at=utcnow(),
+                    )
+                )
             await session.commit()
 
     # --- long-running loops ----------------------------------------------

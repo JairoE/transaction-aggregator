@@ -262,7 +262,8 @@ class PlaidPythonGateway:
                 )
             )
             jwk = response["key"]
-            public_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(dict(jwk)))
+            # plaid-python models are not Mappings; dict() raises on them.
+            public_key = jwt.algorithms.ECAlgorithm.from_jwk(json.dumps(jwk.to_dict()))
             claims = jwt.decode(
                 verification_header,
                 public_key,
@@ -346,10 +347,13 @@ def _transaction(row: object) -> PlaidTransaction:
     )
 
 
-def _credit_card_subtypes() -> list[object]:
-    from plaid.model.account_subtype import AccountSubtype
+def _credit_card_subtypes() -> object:
+    """CreditFilter requires the CreditAccountSubtypes wrapper, not a plain list."""
 
-    return [AccountSubtype("credit card")]
+    from plaid.model.credit_account_subtype import CreditAccountSubtype
+    from plaid.model.credit_account_subtypes import CreditAccountSubtypes
+
+    return CreditAccountSubtypes([CreditAccountSubtype("credit card")])
 
 
 __all__ = ["PlaidPythonGateway"]

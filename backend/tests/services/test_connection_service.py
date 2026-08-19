@@ -280,3 +280,43 @@ async def test_non_credit_accounts_never_become_cards(
         )
     ).scalars().all()
     assert [card.plaid_account_id for card in cards] == ["acct-c"]
+
+
+async def test_exchange_also_enforces_the_trial_cap(
+    production_connection_service: ConnectionService, owner, seed_production_tombstones
+) -> None:
+    """Two tokens can be issued at count 9; only exchange consumes a slot."""
+
+    await seed_production_tombstones(owner.id, 10)
+
+    with pytest.raises(AppError) as error:
+        await production_connection_service.exchange_public_token(
+            owner, "chase", "public-over-cap", "ins_3", "Chase"
+        )
+
+    assert error.value.code == "TRIAL_LIMIT_REACHED"
+
+
+async def test_two_link_tokens_at_nine_cannot_both_be_exchanged(
+    production_connection_service: ConnectionService, owner, seed_production_tombstones
+) -> None:
+    await seed_production_tombstones(owner.id, 9)
+
+    first = await production_connection_service.create_link_token(
+        owner, "chase", confirm_trial_slot=True
+    )
+    second = await production_connection_service.create_link_token(
+        owner, "citi", confirm_trial_slot=True
+    )
+    assert first.production_item_count == second.production_item_count == 9
+
+    await production_connection_service.exchange_public_token(
+        owner, "chase", "public-cap-1", "ins_3", "Chase"
+    )
+
+    with pytest.raises(AppError) as error:
+        await production_connection_service.exchange_public_token(
+            owner, "citi", "public-cap-2", "ins_5", "Citi"
+        )
+
+    assert error.value.code == "TRIAL_LIMIT_REACHED"

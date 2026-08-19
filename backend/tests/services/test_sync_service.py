@@ -398,3 +398,26 @@ async def test_cards_discovered_during_sync_are_upserted(
         "acct-credit-1",
         "acct-credit-2",
     }
+
+
+async def test_redelivered_added_rows_are_not_counted_twice(
+    sync_service, connected_connection, fake_plaid, db_session
+) -> None:
+    token = connected_connection.access_token
+    fake_plaid.script_sync(
+        token,
+        [page(request_cursor="", added=[transaction("t1", "acct-credit-1")], next_cursor="cursor-1")],
+    )
+    first = await sync_service.synchronize(connected_connection.id)
+    assert first.added == 1
+
+    connection = await db_session.get(BankConnection, connected_connection.id)
+    await db_session.refresh(connection)
+    connection.sync_cursor = ""
+    await db_session.commit()
+
+    second = await sync_service.synchronize(connected_connection.id)
+
+    assert second.added == 0
+    rows = (await db_session.execute(select(Transaction))).scalars().all()
+    assert len(rows) == 1
