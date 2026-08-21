@@ -1,8 +1,10 @@
-.PHONY: install test typecheck build dev serve e2e migrate check owner keys
+.PHONY: install sync test typecheck build dev serve e2e migrate check owner keys
 
 install:
 	uv sync --project backend --all-groups
 	pnpm --dir frontend install
+
+sync: install migrate
 
 test:
 	uv run --directory backend pytest -q
