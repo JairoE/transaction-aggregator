@@ -32,9 +32,18 @@ SUPPORTED_BANKS: dict[str, SupportedBank] = {
     "capital-one": SupportedBank(
         "capital-one", "Capital One", frozenset({"ins_128026"})
     ),
-    "chase": SupportedBank("chase", "Chase", frozenset({"ins_3"})),
+    "chase": SupportedBank(
+        # ins_3 is Chase's legacy (pre-OAuth) institution ID; ins_56 is the
+        # entity real Link traffic resolves to since Chase migrated to
+        # OAuth. Plaid never merged the two, so both remain "Chase".
+        "chase", "Chase", frozenset({"ins_3", "ins_56"})
+    ),
     "citi": SupportedBank("citi", "Citi", frozenset({"ins_5"})),
-    "wells-fargo": SupportedBank("wells-fargo", "Wells Fargo", frozenset({"ins_4"})),
+    "wells-fargo": SupportedBank(
+        # ins_4 is stale; ins_127991 is the ID Plaid's registry currently
+        # returns for "Wells Fargo" in both sandbox and production.
+        "wells-fargo", "Wells Fargo", frozenset({"ins_4", "ins_127991"})
+    ),
 }
 
 
