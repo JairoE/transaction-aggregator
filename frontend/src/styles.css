@@ -11,6 +11,9 @@
   --color-border: #e5e5ea;
   --color-danger: #b3261e;
   --color-danger-surface: #fdecea;
+  --color-shell: #14223b;
+  --color-shell-accent: #7cd8ce;
+  --color-shell-canvas: #e7eef3;
   --radius: 8px;
 }
 
@@ -97,54 +100,23 @@ input:focus-visible {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-}
-
-.progress-strip {
-  display: flex;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.progress-strip__step {
-  flex: 1 1 0;
-  padding: 0.5rem 0.75rem 0.4rem;
-}
-
-.progress-strip__bar {
-  display: block;
-  height: 3px;
-  border-radius: 2px;
-  background: var(--color-border);
-  margin-bottom: 0.4rem;
-}
-
-.progress-strip__step.is-active .progress-strip__bar {
-  background: var(--color-accent);
-}
-
-.progress-strip__label {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.progress-strip__step.is-active .progress-strip__label {
-  color: var(--color-text-muted);
-}
-
-.progress-strip__step[aria-current='step'] .progress-strip__label {
-  color: var(--color-text);
-  font-weight: 600;
+  background: var(--color-shell-canvas);
 }
 
 .app-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--color-border);
+  gap: 0.75rem 1rem;
+  min-height: 76px;
+  padding: 0.75rem 1.5rem;
+  background: rgba(231, 238, 243, 0.94);
+  border-bottom: 1px solid rgba(20, 34, 59, 0.08);
+  backdrop-filter: blur(12px);
 }
 
 .app-header__brand {
@@ -154,17 +126,27 @@ input:focus-visible {
 }
 
 .app-header__logo {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--color-accent);
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--color-shell);
   flex-shrink: 0;
 }
 
+.app-header__logo::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  border: 2px solid var(--color-shell-accent);
+  border-radius: 4px;
+}
+
 .app-header__title {
-  font-weight: 600;
+  font-weight: 700;
   margin: 0;
-  color: var(--color-text);
+  color: var(--color-shell);
+  letter-spacing: -0.01em;
 }
 
 .app-header__subtitle {
@@ -176,6 +158,8 @@ input:focus-visible {
 .app-header__status {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 0.75rem;
 }
 
@@ -190,7 +174,10 @@ input:focus-visible {
 }
 
 .app-header__sign-out {
-  background: transparent;
+  min-height: 38px;
+  background: rgba(255, 255, 255, 0.55);
+  border-color: rgba(20, 34, 59, 0.12);
+  color: var(--color-shell);
 }
 
 .status-pill {
@@ -198,10 +185,240 @@ input:focus-visible {
   align-items: center;
   padding: 0.3rem 0.75rem;
   border-radius: 999px;
-  background: var(--color-surface);
-  color: var(--color-accent);
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(20, 34, 59, 0.08);
+  color: var(--color-shell);
   font-weight: 600;
   font-size: 0.85rem;
+}
+
+.app-shell__layout {
+  width: 100%;
+  max-width: 1800px;
+  margin: 0 auto;
+  padding: 1rem 1.5rem 1.5rem;
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  align-items: start;
+  flex: 1 1 auto;
+}
+
+.journey-rail {
+  position: sticky;
+  top: 92px;
+  min-height: calc(100vh - 7rem);
+  padding: 2rem 1.25rem 1.25rem;
+  border-radius: 24px 0 0 24px;
+  background: var(--color-shell);
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.journey-rail__eyebrow {
+  margin: 0 0 0.5rem;
+  color: var(--color-shell-accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.journey-rail__intro h2 {
+  margin: 0 0 0.5rem;
+  color: #ffffff;
+  font-size: 1.5rem;
+  letter-spacing: -0.03em;
+}
+
+.journey-rail__intro > p:last-child {
+  margin: 0;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.journey-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.journey-step {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 2.1rem minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.journey-step.is-current {
+  background: rgba(124, 216, 206, 0.16);
+  border-color: rgba(124, 216, 206, 0.32);
+  color: #ffffff;
+}
+
+.journey-step.is-complete {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.journey-step__marker {
+  width: 2.1rem;
+  height: 2.1rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 9px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.journey-step.is-current .journey-step__marker {
+  background: var(--color-shell-accent);
+  border-color: var(--color-shell-accent);
+  color: var(--color-shell);
+}
+
+.journey-step.is-complete .journey-step__marker {
+  border-color: rgba(124, 216, 206, 0.58);
+  color: var(--color-shell-accent);
+}
+
+.journey-step__copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.journey-step__copy strong {
+  color: inherit;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+.journey-step__description {
+  margin-top: 0.1rem;
+  color: inherit;
+  font-size: 0.72rem;
+  line-height: 1.35;
+  opacity: 0.9;
+}
+
+.journey-rail__privacy {
+  margin: auto 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 0.72rem;
+}
+
+.app-shell__content {
+  min-width: 0;
+  min-height: calc(100vh - 7rem);
+  background: var(--color-surface-strong);
+  border: 1px solid rgba(20, 34, 59, 0.08);
+  border-left: 0;
+  border-radius: 0 24px 24px 0;
+  overflow: hidden;
+}
+
+@media (max-width: 1024px) {
+  .app-shell__layout {
+    grid-template-columns: 232px minmax(0, 1fr);
+    padding-inline: 1rem;
+  }
+
+  .journey-rail {
+    padding-inline: 1rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-shell__layout {
+    display: block;
+    padding: 0.75rem;
+  }
+
+  .journey-rail {
+    position: static;
+    min-height: auto;
+    padding: 0.75rem;
+    border-radius: 20px 20px 0 0;
+  }
+
+  .journey-rail__intro,
+  .journey-rail__privacy {
+    display: none;
+  }
+
+  .journey-steps {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.4rem;
+  }
+
+  .journey-step {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.55rem 0.35rem;
+    text-align: center;
+  }
+
+  .journey-step__marker {
+    width: 1.75rem;
+    height: 1.75rem;
+    border-radius: 8px;
+  }
+
+  .journey-step__copy strong {
+    font-size: 0.76rem;
+  }
+
+  .journey-step__description {
+    display: none;
+  }
+
+  .app-shell__content {
+    min-height: calc(100vh - 12rem);
+    border-top: 0;
+    border-left: 1px solid rgba(20, 34, 59, 0.08);
+    border-radius: 0 0 20px 20px;
+  }
+}
+
+@media (max-width: 600px) {
+  .app-header {
+    position: static;
+    padding: 0.75rem 1rem;
+  }
+
+  .app-header__status {
+    width: 100%;
+    justify-content: space-between;
+    gap: 0.5rem;
+  }
+
+  .app-header__link,
+  .app-header__sign-out,
+  .status-pill {
+    font-size: 0.78rem;
+  }
+
+  .app-header__sign-out {
+    min-height: 36px;
+    padding-inline: 0.75rem;
+  }
 }
 
 .app-loading {

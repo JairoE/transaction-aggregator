@@ -76,6 +76,89 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   expect(overflow, 'page must not scroll horizontally').toBe(false)
 }
 
+test('setup journey is a left rail on desktop and a compact row on mobile', async ({ page }) => {
+  await signIn(page)
+
+  const layout = await page.evaluate(() => {
+    const progress = document.querySelector<HTMLElement>('[aria-label="Setup progress"]')
+    const content = document.querySelector<HTMLElement>('main')
+    const steps = progress?.querySelector<HTMLOListElement>('ol')
+    if (!progress || !content || !steps) {
+      return null
+    }
+
+    const progressRect = progress.getBoundingClientRect()
+    const contentRect = content.getBoundingClientRect()
+    return {
+      viewportWidth: window.innerWidth,
+      progress: {
+        bottom: progressRect.bottom,
+        right: progressRect.right,
+        width: progressRect.width,
+      },
+      content: { left: contentRect.left, top: contentRect.top },
+      stepColumns: getComputedStyle(steps).gridTemplateColumns.split(' ').length,
+    }
+  })
+
+  expect(layout).not.toBeNull()
+  if (!layout) {
+    return
+  }
+
+  if (layout.viewportWidth >= 900) {
+    expect(layout.progress.right).toBeLessThanOrEqual(layout.content.left + 1)
+    expect(layout.progress.width).toBeGreaterThanOrEqual(240)
+  } else {
+    expect(layout.progress.bottom).toBeLessThanOrEqual(layout.content.top + 1)
+    expect(layout.stepColumns).toBe(4)
+  }
+  await expectNoHorizontalOverflow(page)
+})
+
+test('upcoming step descriptions meet minimum text contrast', async ({ page }) => {
+  await signIn(page)
+
+  const contrast = await page.evaluate(() => {
+    const description = document.querySelector<HTMLElement>(
+      '.journey-step.is-upcoming .journey-step__description',
+    )
+    const rail = document.querySelector<HTMLElement>('.journey-rail')
+    if (!description || !rail) {
+      return 0
+    }
+
+    const parseColor = (value: string): [number, number, number, number] => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? []
+      return [channels[0] ?? 0, channels[1] ?? 0, channels[2] ?? 0, channels[3] ?? 1]
+    }
+    const luminance = ([red, green, blue]: number[]) => {
+      const linear = [red, green, blue].map((channel) => {
+        const value = channel / 255
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    const [red, green, blue, colorAlpha] = parseColor(getComputedStyle(description).color)
+    const [bgRed, bgGreen, bgBlue] = parseColor(getComputedStyle(rail).backgroundColor)
+    const alpha = colorAlpha * Number(getComputedStyle(description).opacity)
+    const foreground = [
+      red * alpha + bgRed * (1 - alpha),
+      green * alpha + bgGreen * (1 - alpha),
+      blue * alpha + bgBlue * (1 - alpha),
+    ]
+    const foregroundLuminance = luminance(foreground)
+    const backgroundLuminance = luminance([bgRed, bgGreen, bgBlue])
+    return (
+      (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+      (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+    )
+  })
+
+  expect(contrast).toBeGreaterThanOrEqual(4.5)
+})
+
 test('owner connects four banks and searches every card at once', async ({ page }) => {
   const errors = watchForErrors(page)
 
