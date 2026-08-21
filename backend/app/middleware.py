@@ -105,7 +105,7 @@ class TrustedHostMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):  # type: ignore[no-untyped-def]
         if "*" not in self._allowed:
             host = (request.headers.get("host") or "").split(":", 1)[0].lower()
-            if host and host not in self._allowed:
+            if not host or host not in self._allowed:
                 return JSONResponse(
                     status_code=400,
                     content={
