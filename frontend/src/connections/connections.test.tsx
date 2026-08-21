@@ -292,31 +292,7 @@ describe('bank connections', () => {
     expect(within(card).queryByRole('button', { name: /^connect citi/i })).not.toBeInTheDocument()
   })
 
-  it('reveals View dashboard once all four banks are connected', async () => {
-    server.use(
-      authenticatedSessionHandler(),
-      connectionsHandler(
-        makeConnectionsResponse(
-          (['capital-one', 'chase', 'citi', 'wells-fargo'] as const).map((bank) => ({
-            bank,
-            connected: true,
-            connection_id: `conn-${bank}`,
-            card_count: 2,
-          })),
-        ),
-      ),
-    )
-    const user = userEvent.setup()
-    renderAppAt('/connections')
-    await screen.findByRole('heading', { name: /connect your credit cards/i })
-
-    const dashboardButton = screen.getByRole('button', { name: /view dashboard/i })
-    await user.click(dashboardButton)
-
-    expect(await screen.findByRole('heading', { name: /your credit cards/i })).toBeInTheDocument()
-  })
-
-  it('does not reveal View dashboard until all four banks are connected', async () => {
+  it('reveals View cards once at least one bank is connected', async () => {
     server.use(
       authenticatedSessionHandler(),
       connectionsHandler(
@@ -325,10 +301,22 @@ describe('bank connections', () => {
         ]),
       ),
     )
+    const user = userEvent.setup()
     renderAppAt('/connections')
     await screen.findByRole('heading', { name: /connect your credit cards/i })
 
-    expect(screen.queryByRole('button', { name: /view dashboard/i })).not.toBeInTheDocument()
+    const dashboardButton = screen.getByRole('button', { name: /view cards/i })
+    await user.click(dashboardButton)
+
+    expect(await screen.findByRole('heading', { name: /your credit cards/i })).toBeInTheDocument()
+  })
+
+  it('does not reveal View cards until at least one bank is connected', async () => {
+    server.use(authenticatedSessionHandler(), connectionsHandler(makeConnectionsResponse()))
+    renderAppAt('/connections')
+    await screen.findByRole('heading', { name: /connect your credit cards/i })
+
+    expect(screen.queryByRole('button', { name: /view cards/i })).not.toBeInTheDocument()
   })
 
   it('keeps a failed bank error scoped to its own card and leaves the others usable', async () => {

@@ -52,7 +52,7 @@ export function ConnectionsPage() {
 
   const data = connectionsQuery.data
   const connectedCount = data.banks.filter((bank) => bank.connected).length
-  const allConnected = connectedCount === data.banks.length && data.banks.length > 0
+  const hasAnyConnection = connectedCount > 0
 
   return (
     <AppShell
@@ -81,13 +81,13 @@ export function ConnectionsPage() {
             />
           ))}
         </div>
-        {allConnected && (
+        {hasAnyConnection && (
           <button
             type="button"
             className="primary-button"
             onClick={() => navigate('/dashboard')}
           >
-            View dashboard
+            View cards
           </button>
         )}
       </main>
