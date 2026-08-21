@@ -128,6 +128,34 @@ async def test_wrong_institution_returns_a_stable_code(
     assert response.json()["code"] == "WRONG_INSTITUTION_LINKED"
 
 
+async def test_wrong_institution_tombstone_survives_the_request(
+    authenticated_client: AsyncClient, csrf_token: str, db_session
+) -> None:
+    """Regression: the tombstone write must survive the AppError that the
+    session dependency turns into a rollback. A service-level test using
+    db_session directly cannot catch this, since it never exercises the
+    request's own commit/rollback wrapper (app.dependencies.get_db_session).
+    """
+    from sqlalchemy import select
+
+    from app.models import BankConnection
+
+    await _exchange(
+        authenticated_client, csrf_token, "wells-fargo", "ins_5", "Citi", "public-tomb"
+    )
+
+    tombstones = (
+        await db_session.execute(
+            select(BankConnection).where(
+                BankConnection.last_error_code == "WRONG_INSTITUTION_LINKED"
+            )
+        )
+    ).scalars().all()
+    assert len(tombstones) == 1
+    assert tombstones[0].lifecycle_status == "removed"
+    assert tombstones[0].access_token_ciphertext is None
+
+
 async def test_update_token_uses_update_mode(
     authenticated_client: AsyncClient, csrf_token: str
 ) -> None:

@@ -304,7 +304,12 @@ class ConnectionService:
                     last_error_at=utcnow(),
                 )
             )
-            await self._session.flush()
+            # A flush alone is not durable: the AppError below propagates
+            # through the request's session dependency, which rolls back on
+            # any exception. This tombstone must survive that rollback, or
+            # the cumulative Trial-slot count silently undercounts a Plaid
+            # Item that was actually created and removed (FR-CONN-011).
+            await self._session.commit()
             raise AppError(
                 "WRONG_INSTITUTION_LINKED",
                 f"That sign-in was not {supported.display_name}. The connection was "
