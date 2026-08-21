@@ -29,6 +29,13 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# Sandbox tests reach the real Plaid API, so the default suite stays offline
+# and deterministic. `make test-sandbox` passes its own -m, which overrides
+# this one.
+addopts = "-m 'not plaid_sandbox'"
+markers = [
+  "plaid_sandbox: hits the real Plaid Sandbox API over the network; needs PLAID_SANDBOX_CLIENT_ID and PLAID_SANDBOX_SECRET",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

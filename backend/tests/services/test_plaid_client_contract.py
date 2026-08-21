@@ -118,6 +118,48 @@ def test_gateway_constructs_against_both_hosts(production_settings: Settings) ->
     assert PlaidPythonGateway(production_settings) is not None
 
 
+def test_only_the_production_environment_selects_the_production_host() -> None:
+    """The live Sandbox suite depends on this to stay affordable: it builds
+    settings with `environment="sandbox"` and trusts that no other value can
+    route it at the production API, where every exchange would spend a real,
+    non-refundable Trial Item slot.
+    """
+
+    def _settings(environment: str) -> Settings:
+        return Settings(
+            _env_file=None,
+            environment=environment,
+            database_url="sqlite+aiosqlite:///:memory:",
+            application_secret="s" * 32,
+            token_encryption_key="k" * 43,
+            public_base_url="https://aggregator.example.com",
+            plaid_client_id="client-id",
+            plaid_secret="plaid-secret",
+        )
+
+    assert _settings("production").plaid_host_environment == "production"
+    for safe in ("sandbox", "demo", "test"):
+        assert _settings(safe).plaid_host_environment == "sandbox"
+
+
+def test_sandbox_public_token_request_is_a_valid_sdk_object() -> None:
+    """The live suite mints tokens with this request instead of running Link.
+    Constructing it here fails fast on SDK drift without needing credentials.
+    """
+
+    from plaid.model.products import Products
+    from plaid.model.sandbox_public_token_create_request import (
+        SandboxPublicTokenCreateRequest,
+    )
+
+    request = SandboxPublicTokenCreateRequest(
+        institution_id="ins_109508",
+        initial_products=[Products("transactions")],
+    )
+
+    assert request.institution_id == "ins_109508"
+
+
 def test_user_create_response_yields_distinct_id_and_token() -> None:
     """The two fields have different formats; conflating them produces
     Plaid's INVALID_USER_TOKEN error on the following link_token_create call.
