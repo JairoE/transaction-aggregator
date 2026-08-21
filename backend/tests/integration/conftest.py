@@ -34,11 +34,25 @@ SANDBOX_INSTITUTION_ID = "ins_109508"
 _CLIENT_ID = os.environ.get("PLAID_SANDBOX_CLIENT_ID", "").strip()
 _SECRET = os.environ.get("PLAID_SANDBOX_SECRET", "").strip()
 
+#: `create_link_token` always sends `{PUBLIC_BASE_URL}/oauth-return`, and Plaid
+#: rejects a redirect URI that is not registered in the dashboard. Tests that
+#: create link tokens therefore need a base URL the account actually owns;
+#: everything else works against a placeholder.
+_REDIRECT_BASE_URL = os.environ.get("PLAID_SANDBOX_REDIRECT_BASE_URL", "").strip()
+
 requires_sandbox_credentials = pytest.mark.skipif(
     not (_CLIENT_ID and _SECRET),
     reason=(
         "set PLAID_SANDBOX_CLIENT_ID and PLAID_SANDBOX_SECRET "
         "(Plaid dashboard → Keys → Sandbox) to run the live sandbox suite"
+    ),
+)
+
+requires_registered_redirect_uri = pytest.mark.skipif(
+    not _REDIRECT_BASE_URL,
+    reason=(
+        "set PLAID_SANDBOX_REDIRECT_BASE_URL to a base URL whose "
+        "/oauth-return is registered in the Plaid dashboard"
     ),
 )
 
@@ -58,7 +72,7 @@ def sandbox_settings() -> Settings:
         database_url="sqlite+aiosqlite:///:memory:",
         application_secret="s" * 32,
         token_encryption_key="k" * 43,
-        public_base_url="https://aggregator.example.com",
+        public_base_url=_REDIRECT_BASE_URL or "https://aggregator.example.com",
         plaid_client_id=_CLIENT_ID or "unset",
         plaid_secret=_SECRET or "unset",
     )
