@@ -123,7 +123,7 @@
 - Produces: React `App` component with the product heading
 - Consumes: no application interfaces
 
-- [ ] **Step 1: Create the dependency manifests and failing smoke tests**
+- [x] **Step 1: Create the dependency manifests and failing smoke tests**
 
 Use Python 3.12 and these dependency groups in `backend/pyproject.toml`:
 
@@ -194,7 +194,7 @@ it('renders the product heading', () => {
 })
 ```
 
-- [ ] **Step 2: Install dependencies and verify both smoke tests fail**
+- [x] **Step 2: Install dependencies and verify both smoke tests fail**
 
 Run:
 
@@ -207,7 +207,7 @@ pnpm --dir frontend test -- app.test.tsx
 
 Expected: backend collection fails because `create_app` is missing, and frontend collection fails because `App` is missing.
 
-- [ ] **Step 3: Implement the minimal application entry points**
+- [x] **Step 3: Implement the minimal application entry points**
 
 Create `backend/app/main.py`:
 
@@ -238,7 +238,7 @@ export function App() {
 
 Wire `frontend/src/main.tsx` through `createRoot`, configure Vitest with `jsdom` and the setup file, and add Make targets `install`, `test`, `typecheck`, and `build` that call both workspaces.
 
-- [ ] **Step 4: Verify the skeleton**
+- [x] **Step 4: Verify the skeleton**
 
 Run:
 
@@ -251,7 +251,7 @@ pnpm --dir frontend build
 
 Expected: two smoke tests pass, TypeScript exits 0, and Vite writes `frontend/dist`.
 
-- [ ] **Step 5: Commit the skeleton**
+- [x] **Step 5: Commit the skeleton**
 
 ```bash
 git add Makefile .gitignore backend frontend
@@ -284,7 +284,7 @@ git commit -m "chore: scaffold frontend and backend"
 - Produces: SQLAlchemy models `Owner`, `OwnerSession`, `BankConnection`, `CardAccount`, `Transaction`, `SyncJob`, `SyncRun`, and `WebhookReceipt`
 - Consumes: `create_app()` from Task 1
 
-- [ ] **Step 1: Write failing configuration, encryption, and schema tests**
+- [x] **Step 1: Write failing configuration, encryption, and schema tests**
 
 Define the encryption contract in `backend/tests/services/test_crypto.py`:
 
@@ -308,7 +308,7 @@ def test_access_token_round_trip_does_not_store_plaintext() -> None:
 
 Define a migration test that upgrades an empty SQLite database and asserts the exact core table names and uniqueness of `transactions.plaid_transaction_id`.
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run:
 
@@ -321,7 +321,7 @@ uv run --project backend pytest \
 
 Expected: collection fails because `config`, `models`, and `TokenCipher` do not exist.
 
-- [ ] **Step 3: Implement validated settings and AES-GCM encryption**
+- [x] **Step 3: Implement validated settings and AES-GCM encryption**
 
 Define `Settings` with these required values:
 
@@ -341,7 +341,7 @@ class Settings(BaseSettings):
 
 `TokenCipher` shall decode exactly 32 key bytes, generate a new 12-byte nonce for every encryption, authenticate the key version as associated data, and store URL-safe base64 ciphertext and nonce values.
 
-- [ ] **Step 4: Implement models and the initial Alembic migration**
+- [x] **Step 4: Implement models and the initial Alembic migration**
 
 Use string UUID primary keys and UTC-aware timestamps. Add these constraints:
 
@@ -354,7 +354,7 @@ Use string UUID primary keys and UTC-aware timestamps. Add these constraints:
 
 Keep removed `BankConnection` rows with `lifecycle_status="removed"`, null encrypted-token fields, and `removed_at` populated. Store money as signed integer cents plus ISO currency code.
 
-- [ ] **Step 5: Verify migration, round trip, permissions defaults, and model constraints**
+- [x] **Step 5: Verify migration, round trip, permissions defaults, and model constraints**
 
 Run:
 
@@ -368,7 +368,7 @@ uv run --project backend pytest \
 
 Expected: migration reaches `0001`, all focused tests pass, and a second insert using the same Plaid transaction ID raises an integrity error.
 
-- [ ] **Step 6: Commit the persistence foundation**
+- [x] **Step 6: Commit the persistence foundation**
 
 ```bash
 git add .env.example backend/app/config.py backend/app/db.py \
@@ -402,7 +402,7 @@ git commit -m "feat: add encrypted local persistence"
 - Produces: `POST /api/auth/login`, `GET /api/auth/session`, and `POST /api/auth/logout`
 - Consumes: `Owner`, `OwnerSession`, and `Settings` from Task 2
 
-- [ ] **Step 1: Write failing service and endpoint tests**
+- [x] **Step 1: Write failing service and endpoint tests**
 
 Cover these behaviors in `backend/tests/api/test_auth.py`:
 
@@ -428,7 +428,7 @@ async def test_mutation_rejects_missing_csrf(client, authenticated_owner) -> Non
 
 Also test invalid credentials, normalized email case, expired sessions, logout revocation, repeated owner creation, and that the stored session value is a SHA-256 hash rather than the cookie value.
 
-- [ ] **Step 2: Run authentication tests and verify failure**
+- [x] **Step 2: Run authentication tests and verify failure**
 
 Run:
 
@@ -439,7 +439,7 @@ uv run --project backend pytest \
 
 Expected: collection fails because authentication services and routes are missing.
 
-- [ ] **Step 3: Implement password and session services**
+- [x] **Step 3: Implement password and session services**
 
 Use Argon2id through `pwdlib.PasswordHash.recommended()`. Generate the browser token and CSRF token independently with `secrets.token_urlsafe(32)`, store only `sha256(browser_token).hexdigest()`, and set a 12-hour expiry.
 
@@ -458,7 +458,7 @@ class OwnerResponse(BaseModel):
 
 Return the same generic `AUTH_INVALID` response for unknown email and wrong password.
 
-- [ ] **Step 4: Implement the local owner CLI and route dependencies**
+- [x] **Step 4: Implement the local owner CLI and route dependencies**
 
 Expose this command:
 
@@ -468,7 +468,7 @@ uv run --project backend python -m app.cli create-owner --email owner@example.co
 
 Prompt twice with `getpass`, reject fewer than 14 characters, and refuse creation when an owner row already exists. `require_csrf` shall compare the `X-CSRF-Token` header using `secrets.compare_digest` and reject an unexpected `Origin` before a mutation reaches a route handler.
 
-- [ ] **Step 5: Register routes and verify authentication**
+- [x] **Step 5: Register routes and verify authentication**
 
 Run:
 
@@ -480,7 +480,7 @@ uv run --project backend pytest -q
 
 Expected: focused and regression suites pass with no plaintext password or session token in captured logs.
 
-- [ ] **Step 6: Commit owner authentication**
+- [x] **Step 6: Commit owner authentication**
 
 ```bash
 git add backend/app backend/tests backend/pyproject.toml backend/uv.lock
@@ -511,7 +511,7 @@ git commit -m "feat: add single-owner authentication"
 - Produces: `GET /api/connections`, `POST /api/connections/link-token`, `POST /api/connections/exchange`, `POST /api/connections/{id}/update-token`, and `DELETE /api/connections/{id}`
 - Consumes: authentication dependencies and encrypted persistence from Tasks 2–3
 
-- [ ] **Step 1: Write a fake Plaid gateway and failing connection tests**
+- [x] **Step 1: Write a fake Plaid gateway and failing connection tests**
 
 Define this protocol before the concrete client:
 
@@ -546,7 +546,7 @@ Test:
 - an unexpected institution is immediately removed, recorded as a consumed tombstone, and returns `WRONG_INSTITUTION_LINKED`;
 - disconnect removes the Plaid Item, purges cards/transactions, clears token fields, and retains the tombstone.
 
-- [ ] **Step 2: Run connection tests and verify failure**
+- [x] **Step 2: Run connection tests and verify failure**
 
 Run:
 
@@ -557,7 +557,7 @@ uv run --project backend pytest \
 
 Expected: collection fails because the Plaid gateway, connection service, and routes are missing.
 
-- [ ] **Step 3: Implement the Plaid gateway boundary**
+- [x] **Step 3: Implement the Plaid gateway boundary**
 
 Use these default institution identifiers, while allowing a JSON environment override for provider migrations:
 
@@ -572,7 +572,7 @@ SUPPORTED_BANKS = {
 
 Translate Plaid SDK exceptions into application exceptions containing only provider error code, request ID, and retry class. Never include access tokens or raw request bodies in exception text.
 
-- [ ] **Step 4: Implement the Trial guard and connection transaction**
+- [x] **Step 4: Implement the Trial guard and connection transaction**
 
 Before production Link token creation:
 
@@ -584,7 +584,7 @@ Before production Link token creation:
 
 During exchange, decrypt nothing from browser input. Exchange server-side, validate the institution metadata against the selected bank, encrypt the access token, upsert only `type="credit"` and `subtype="credit card"` accounts, and enqueue initial synchronization in the same database transaction.
 
-- [ ] **Step 5: Implement authenticated routes and update mode**
+- [x] **Step 5: Implement authenticated routes and update mode**
 
 Use these request shapes:
 
@@ -603,7 +603,7 @@ class ExchangePublicTokenRequest(BaseModel):
 
 Update-mode Link tokens use the decrypted existing access token, omit `products`, and never increment the local production Item count.
 
-- [ ] **Step 6: Verify all connection paths**
+- [x] **Step 6: Verify all connection paths**
 
 Run:
 
@@ -615,7 +615,7 @@ uv run --project backend pytest -q
 
 Expected: all connection cases and the regression suite pass; fake gateway call logs contain no plaintext access token after assertions are complete.
 
-- [ ] **Step 7: Commit connection management**
+- [x] **Step 7: Commit connection management**
 
 ```bash
 git add backend/app backend/tests
@@ -647,7 +647,7 @@ git commit -m "feat: add Plaid connection management"
 - Produces: `POST /api/connections/{id}/sync`, `GET /api/sync/status`, and `POST /api/webhooks/plaid`
 - Consumes: encrypted connections and `PlaidGateway` from Task 4
 
-- [ ] **Step 1: Extend the fake gateway and write failing reconciliation tests**
+- [x] **Step 1: Extend the fake gateway and write failing reconciliation tests**
 
 Add exact gateway values:
 
@@ -683,7 +683,7 @@ Test:
 - duplicate signed webhooks create one receipt and at most one queued job;
 - invalid webhook signatures return 401 and enqueue nothing.
 
-- [ ] **Step 2: Run synchronization tests and verify failure**
+- [x] **Step 2: Run synchronization tests and verify failure**
 
 Run:
 
@@ -697,7 +697,7 @@ uv run --project backend pytest \
 
 Expected: collection fails because synchronization services and routes are missing.
 
-- [ ] **Step 3: Implement transactional cursor reconciliation**
+- [x] **Step 3: Implement transactional cursor reconciliation**
 
 Use this page-loop invariant:
 
@@ -723,13 +723,13 @@ apply_pages_and_cursor_in_one_transaction(pages, request_cursor)
 
 Convert decimal Plaid amounts to integer cents with `Decimal.quantize`, normalize dates to ISO values, and compute `search_text` from merchant, name, and original description. Upsert by Plaid transaction ID; deleting a removed ID must be idempotent.
 
-- [ ] **Step 4: Implement the durable job worker and scheduler**
+- [x] **Step 4: Implement the durable job worker and scheduler**
 
 Claim one due queued job with a database transaction, mark it running, execute outside the claim transaction, then record success or the classified failure. The FastAPI lifespan starts one worker loop and one hourly stale-connection scheduler. Tests receive a disabled lifespan worker and invoke `run_once()` deterministically.
 
 Use job triggers `initial`, `startup`, `scheduled`, `webhook`, and `manual`. The partial unique index prevents more than one queued/running job per connection.
 
-- [ ] **Step 5: Implement verified webhook and manual sync routes**
+- [x] **Step 5: Implement verified webhook and manual sync routes**
 
 The webhook route shall:
 
@@ -743,7 +743,7 @@ The webhook route shall:
 
 Manual sync returns HTTP 202 with the existing or new job ID. If refresh is allowed and its 15-minute cooldown has elapsed, request refresh before enqueueing normal sync.
 
-- [ ] **Step 6: Verify sync recovery and regression behavior**
+- [x] **Step 6: Verify sync recovery and regression behavior**
 
 Run:
 
@@ -758,7 +758,7 @@ uv run --project backend pytest -q
 
 Expected: focused tests pass, duplicate fixtures leave one row, mutation fixtures restart at the original cursor, and the full backend suite passes.
 
-- [ ] **Step 7: Commit synchronization**
+- [x] **Step 7: Commit synchronization**
 
 ```bash
 git add backend/app backend/tests
@@ -787,7 +787,7 @@ git commit -m "feat: synchronize Plaid transactions"
 - Produces: `GET /api/cards/{card_id}/transactions?cursor={cursor}&limit={limit}`
 - Consumes: cached `CardAccount` and `Transaction` rows from Tasks 2 and 5
 
-- [ ] **Step 1: Write the failing migration, service, and API tests**
+- [x] **Step 1: Write the failing migration, service, and API tests**
 
 Seed eight cards and transactions whose `merchant_name`, `name`, and `original_description` contain mixed-case variants of `Paze`. Assert:
 
@@ -832,7 +832,7 @@ class GroupedSearchResponse(BaseModel):
     cache_as_of: datetime | None
 ```
 
-- [ ] **Step 2: Run the focused tests and verify failure**
+- [x] **Step 2: Run the focused tests and verify failure**
 
 Run:
 
@@ -845,19 +845,19 @@ uv run --project backend pytest \
 
 Expected: migration assertions fail because the search index is absent, then test collection fails on the missing search service and route.
 
-- [ ] **Step 3: Add the FTS5 migration and query normalization**
+- [x] **Step 3: Add the FTS5 migration and query normalization**
 
 Create an external-content FTS5 table with `tokenize='trigram'`, keyed by the integer transaction row ID and indexing `merchant_name`, `name`, `original_description`, and `search_text`. Add insert, update, and delete triggers, then rebuild the index during migration. Verify SQLite was compiled with FTS5 and the trigram tokenizer at application startup and fail with a clear configuration error if either is unavailable.
 
 `normalize_query` shall Unicode-normalize, trim, collapse internal whitespace, cap input at 100 characters, and generate safely quoted FTS terms. A blank normalized query selects the recent-transactions path. Punctuation-only input remains a literal substring query. For normalized terms shorter than three characters, use escaped `LIKE` predicates over indexed normalized columns; never concatenate user input into SQL.
 
-- [ ] **Step 4: Implement deterministic grouped pagination**
+- [x] **Step 4: Implement deterministic grouped pagination**
 
 Order matches by `COALESCE(posted_date, authorized_date) DESC`, then `id DESC`. Encode each card cursor as URL-safe base64 JSON containing `card_id`, last sort date, and last ID, signed with HMAC-SHA256 using the application secret. Reject malformed, expired, or cross-card cursors with `CURSOR_INVALID`.
 
 The grouped endpoint executes entirely against SQLite, lists active credit cards in bank/card display order, queries at most `per_card_limit + 1` matches per card, and computes exact per-card and total counts in the same read transaction. Clamp `per_card_limit` to 1–50, default 25. The unfiltered card endpoint uses the same serializer and cursor rules.
 
-- [ ] **Step 5: Register the routes and verify search behavior**
+- [x] **Step 5: Register the routes and verify search behavior**
 
 Run:
 
@@ -872,7 +872,7 @@ uv run --project backend pytest -q
 
 Expected: migration reaches `0002`; the `Paze` fixture reports 10 matches across eight groups; cursor, injection, and performance tests pass; the full backend suite stays green.
 
-- [ ] **Step 6: Commit cached search**
+- [x] **Step 6: Commit cached search**
 
 ```bash
 git add backend/alembic backend/app backend/tests
@@ -907,7 +907,7 @@ git commit -m "feat: add grouped transaction search"
 - Produces: `/oauth-return` continuation through `OAuthReturnPage`
 - Consumes: authentication and connection API contracts from Tasks 3–4
 
-- [ ] **Step 1: Write failing UI tests with MSW**
+- [x] **Step 1: Write failing UI tests with MSW**
 
 Test these user-observable states:
 
@@ -925,7 +925,7 @@ Test these user-observable states:
 
 Use semantic role queries and add an `axe` smoke assertion for the login and connections views.
 
-- [ ] **Step 2: Run the UI tests and verify failure**
+- [x] **Step 2: Run the UI tests and verify failure**
 
 Run:
 
@@ -935,7 +935,7 @@ pnpm --dir frontend test -- auth connections
 
 Expected: tests fail because `AuthProvider`, `LoginPage`, `ConnectionsPage`, `OAuthReturnPage`, and the MSW handlers do not exist.
 
-- [ ] **Step 3: Implement the typed API boundary and auth route guard**
+- [x] **Step 3: Implement the typed API boundary and auth route guard**
 
 Generate `frontend/src/api/generated.ts` from FastAPI's OpenAPI document with a pinned script, then expose a small manual wrapper:
 
@@ -952,7 +952,7 @@ export class ApiClient {
 
 Always use `credentials: 'same-origin'`. Add `X-CSRF-Token` only for mutating requests, decode the stable API error envelope, and redirect to sign-in on `AUTH_REQUIRED` without retrying a mutation.
 
-- [ ] **Step 4: Implement fixed-bank connection cards and Plaid Link**
+- [x] **Step 4: Implement fixed-bank connection cards and Plaid Link**
 
 Render Capital One, Chase, Citi, and Wells Fargo from a typed constant, not from provider-supplied markup. A connect action obtains a Link token server-side, invokes `usePlaidLink`, and sends only `public_token`, selected bank slug, and institution metadata back to the exchange endpoint. Disable repeat clicks while Link or exchange is active.
 
@@ -960,7 +960,7 @@ Display initial synchronization as `Connecting`, `Loading accounts`, `Loading tr
 
 Before Link opens, store only `{ bank, linkToken, expiresAt }` in `sessionStorage` under an owner-scoped continuation key. Route the registered redirect URI to `/oauth-return`; there, reject missing or expired state and otherwise reinitialize `react-plaid-link` with the same Link token and `receivedRedirectUri=window.location.href`. Clear the continuation on success, exit, logout, or expiry. A top-level OAuth return shall never place a public token, access token, or bank credential in a URL or persistent browser storage.
 
-- [ ] **Step 5: Verify frontend connection flows**
+- [x] **Step 5: Verify frontend connection flows**
 
 Run:
 
@@ -972,7 +972,7 @@ pnpm --dir frontend build
 
 Expected: all focused tests pass, TypeScript exits 0, and the production bundle contains no Plaid secret or server access token pattern.
 
-- [ ] **Step 6: Commit the sign-in and connection UI**
+- [x] **Step 6: Commit the sign-in and connection UI**
 
 ```bash
 git add frontend
@@ -1001,7 +1001,7 @@ git commit -m "feat: add owner and bank connection flows"
 - Produces: `TransactionList({ transactions, height })` with virtualization
 - Consumes: grouped search and per-card transaction contracts from Task 6
 
-- [ ] **Step 1: Write the failing dashboard and interaction tests**
+- [x] **Step 1: Write the failing dashboard and interaction tests**
 
 Use the approved eight-card fixture and assert:
 
@@ -1016,7 +1016,7 @@ Use the approved eight-card fixture and assert:
 - 320 px, 768 px, and 1440 px viewport snapshots have no horizontal overflow;
 - every result row exposes date, merchant/description, pending state, and signed amount to assistive technology.
 
-- [ ] **Step 2: Run the focused dashboard tests and verify failure**
+- [x] **Step 2: Run the focused dashboard tests and verify failure**
 
 Run:
 
@@ -1026,7 +1026,7 @@ pnpm --dir frontend test -- dashboard search-flow
 
 Expected: tests fail because dashboard components and query hooks are missing.
 
-- [ ] **Step 3: Implement query ownership and explicit submission**
+- [x] **Step 3: Implement query ownership and explicit submission**
 
 Keep `draftQuery` separate from `submittedQuery`. Only the form submit handler copies draft to submitted state. Use TanStack Query keys `['transactions', 'search', submittedQuery]` and a distinct query per card cursor. Abort the previous request when the key changes and retain the previous successful page only while the new request is pending.
 
@@ -1040,13 +1040,13 @@ type SearchBarProps = {
 }
 ```
 
-- [ ] **Step 4: Implement responsive, independent card lists**
+- [x] **Step 4: Implement responsive, independent card lists**
 
 Use one column below 768 px, two columns from 768–1199 px, and four columns at 1200 px and above. Keep each card panel at a minimum 360 px height and its transaction viewport at 260 px. Use TanStack Virtual only inside each transaction viewport, with stable transaction IDs as keys and a visible `Load more` control when `has_more=true`.
 
 Amounts use `Intl.NumberFormat` and stored currency; dates use the user's locale while retaining an ISO `datetime`. Do not encode bank identity with color alone.
 
-- [ ] **Step 5: Verify the approved `Paze` behavior and responsive grid**
+- [x] **Step 5: Verify the approved `Paze` behavior and responsive grid**
 
 Run:
 
@@ -1058,7 +1058,7 @@ pnpm --dir frontend build
 
 Expected: the eight-card fixture shows 10 grouped `Paze` matches only after submit, each card paginates independently, and all tested viewports avoid horizontal scrolling.
 
-- [ ] **Step 6: Commit the dashboard**
+- [x] **Step 6: Commit the dashboard**
 
 ```bash
 git add frontend
@@ -1088,7 +1088,7 @@ git commit -m "feat: add grouped transaction dashboard"
 - Produces: `ConnectionNotice` and `CacheStatusBanner`
 - Consumes: update-mode Link, sync status, and cached-search responses from Tasks 4–8
 
-- [ ] **Step 1: Write failing backend classification and frontend recovery tests**
+- [x] **Step 1: Write failing backend classification and frontend recovery tests**
 
 Cover:
 
@@ -1101,7 +1101,7 @@ Cover:
 - reconnect success enqueues sync and returns the connection to `syncing` then `ready`;
 - a removed connection's cached transactions are absent rather than silently stale.
 
-- [ ] **Step 2: Run the recovery tests and verify failure**
+- [x] **Step 2: Run the recovery tests and verify failure**
 
 Run:
 
@@ -1112,7 +1112,7 @@ pnpm --dir frontend test -- recovery-states
 
 Expected: backend collection fails on the missing classifier and frontend tests fail on missing recovery components.
 
-- [ ] **Step 3: Implement one canonical health classifier**
+- [x] **Step 3: Implement one canonical health classifier**
 
 Define:
 
@@ -1129,13 +1129,13 @@ class ConnectionHealth(BaseModel):
 
 Use provider error codes only for classification and user-safe copy; never return raw Plaid messages. `needs_reconnect` and `consent_expired` create an update-mode Link token against the existing Item and do not consume another Trial slot.
 
-- [ ] **Step 4: Implement resilient cached-data UI states**
+- [x] **Step 4: Implement resilient cached-data UI states**
 
 Keep bank errors inside their associated connection card and card panels. A global banner may summarize `2 of 4 banks need attention`, but it must not replace successful results. Persist only successful query-cache entries in `sessionStorage`, namespace by owner ID, expire them after 12 hours, and clear them on logout. Never persist auth or CSRF tokens.
 
 When `navigator.onLine` is false, label results `Offline · cached {timestamp}`, keep local search results visible, and disable controls that require the backend. When the API is reachable but Plaid is degraded, local search and cached lists remain enabled.
 
-- [ ] **Step 5: Verify recovery and regression behavior**
+- [x] **Step 5: Verify recovery and regression behavior**
 
 Run:
 
@@ -1149,7 +1149,7 @@ pnpm --dir frontend typecheck
 
 Expected: targeted and regression tests pass; partial failures preserve healthy data; update mode repairs the existing Item without increasing the production Item count.
 
-- [ ] **Step 6: Commit recovery states**
+- [x] **Step 6: Commit recovery states**
 
 ```bash
 git add backend/app backend/tests frontend
@@ -1180,7 +1180,7 @@ git commit -m "feat: add connection recovery states"
 - Produces: local HTTPS tunnel and deployment runbook in `docs/operations.md`
 - Consumes: all application behavior from Tasks 1–9
 
-- [ ] **Step 1: Write failing packaging, header, and end-to-end tests**
+- [x] **Step 1: Write failing packaging, header, and end-to-end tests**
 
 Backend tests assert:
 
@@ -1192,7 +1192,7 @@ Backend tests assert:
 
 Playwright tests cover the exact acceptance flow: owner sign-in; sequential Capital One, Chase, Citi, and Wells Fargo connections; eight loaded credit cards; typing `Paze`; explicit submission; 10 grouped matches; independent list scrolling; and logout. Add a second test for one reconnect-required bank, one provider failure, stale cache, and offline display.
 
-- [ ] **Step 2: Run the new tests and verify failure**
+- [x] **Step 2: Run the new tests and verify failure**
 
 Run:
 
@@ -1204,13 +1204,13 @@ pnpm --dir frontend e2e
 
 Expected: backend assertions fail because static serving and headers are absent, and Playwright fails because the production server fixture and flows are not configured.
 
-- [ ] **Step 3: Implement same-origin production delivery and safe telemetry**
+- [x] **Step 3: Implement same-origin production delivery and safe telemetry**
 
 Build the SPA before packaging. Mount immutable hashed assets with a one-year cache policy, serve `index.html` with `no-cache`, and return the SPA fallback only for non-API GET requests that accept HTML. Add request IDs at the ASGI boundary and emit structured JSON fields rather than serialized request bodies.
 
 Record route, status, elapsed milliseconds, owner ID, connection ID, sync-run ID, Plaid request ID, rows added/modified/removed, and classified error code where applicable. Apply recursive redaction before serialization and do not log search queries by default.
 
-- [ ] **Step 4: Document local HTTPS and deployment operations**
+- [x] **Step 4: Document local HTTPS and deployment operations**
 
 `docs/operations.md` must give exact commands to:
 
@@ -1225,7 +1225,7 @@ Record route, status, elapsed milliseconds, owner ID, connection ID, sync-run ID
 
 Bind Uvicorn to `127.0.0.1` by default. Require an explicit `TRUSTED_HOSTS` allowlist and fail startup when production uses a loopback or plain-HTTP public URL.
 
-- [ ] **Step 5: Implement and run the end-to-end fixtures**
+- [x] **Step 5: Implement and run the end-to-end fixtures**
 
 Use MSW or a deterministic fake Plaid adapter; automated tests must never access live bank accounts. Configure Playwright for system Chromium, capture traces on retry, and test desktop plus a 375 px mobile project. Assert no `pageerror`, failed API request, console error, or horizontal overflow.
 
@@ -1242,7 +1242,7 @@ uv run --project backend alembic check
 
 Expected: backend, frontend, and end-to-end suites pass; builds exit 0; desktop and mobile complete the full `Paze` flow; Alembic reports no pending model changes.
 
-- [ ] **Step 6: Perform release security and operations checks**
+- [x] **Step 6: Perform release security and operations checks**
 
 Run:
 
@@ -1255,7 +1255,7 @@ curl -fsS https://localhost.example/api/health
 
 Expected: the secret-log scan returns no application matches, Python dependencies are consistent, the production dependency audit has no high/critical findings, and the configured HTTPS tunnel returns `{"status":"ok"}`. Replace `localhost.example` with the registered tunnel hostname from `docs/operations.md` when executing the plan.
 
-- [ ] **Step 7: Commit production readiness and end-to-end coverage**
+- [x] **Step 7: Commit production readiness and end-to-end coverage**
 
 ```bash
 git add Makefile backend frontend docs/operations.md
@@ -1266,15 +1266,15 @@ git commit -m "chore: add production operations and e2e coverage"
 
 ## Final Verification Before Opening the Implementation PR
 
-- [ ] Run `git diff --check main..HEAD` and require no whitespace errors.
-- [ ] Run `make test`, `make typecheck`, `make build`, and `make e2e`; preserve the command output in the PR validation section.
-- [ ] Run `uv run --project backend alembic upgrade head` against a new SQLite file and require migrations `0001` and `0002` to succeed.
-- [ ] Confirm the API's OpenAPI schema matches `frontend/src/api/generated.ts` with the pinned generation command.
-- [ ] Confirm four supported institutions, eight-card fixture coverage, and 10 grouped `Paze` matches in Playwright.
-- [ ] Confirm no browser console/page errors, failed API requests, or horizontal overflow at 375 px and 1440 px.
-- [ ] Confirm a production connection requires Trial-slot acknowledgement and the 10-Item cumulative guard rejects Item 11.
-- [ ] Confirm every bank-specific failure preserves cached data for healthy banks.
-- [ ] Confirm no secrets appear in the built frontend, application logs, test snapshots, or committed fixtures.
-- [ ] Confirm `docs/operations.md` includes backup/restore and stable HTTPS callback procedures.
+- [x] Run `git diff --check main..HEAD` and require no whitespace errors.
+- [x] Run `make test`, `make typecheck`, `make build`, and `make e2e`; preserve the command output in the PR validation section.
+- [x] Run `uv run --project backend alembic upgrade head` against a new SQLite file and require migrations `0001` and `0002` to succeed.
+- [x] Confirm the API's OpenAPI schema matches `frontend/src/api/generated.ts` with the pinned generation command.
+- [x] Confirm four supported institutions, eight-card fixture coverage, and 10 grouped `Paze` matches in Playwright.
+- [x] Confirm no browser console/page errors, failed API requests, or horizontal overflow at 375 px and 1440 px.
+- [x] Confirm a production connection requires Trial-slot acknowledgement and the 10-Item cumulative guard rejects Item 11.
+- [x] Confirm every bank-specific failure preserves cached data for healthy banks.
+- [x] Confirm no secrets appear in the built frontend, application logs, test snapshots, or committed fixtures.
+- [x] Confirm `docs/operations.md` includes backup/restore and stable HTTPS callback procedures.
 
 The implementation is complete only when every checkbox above is satisfied and the acceptance criteria in `docs/PRD.md` have corresponding passing automated evidence.
