@@ -76,3 +76,34 @@ def test_production_accepts_stable_https_public_base_url() -> None:
     settings = Settings(_env_file=None, **values)
 
     assert settings.environment == "production"
+
+
+def test_production_origin_allowlist_excludes_local_dev_servers() -> None:
+    """Browsing a production deployment over loopback fails in a way that
+    looks like a bug rather than a policy: the Secure session cookie is never
+    stored, so a successful sign-in still reads as signed out, and any write
+    comes back ORIGIN_INVALID. Only PUBLIC_BASE_URL is trusted here.
+    """
+    values = {
+        k.lower(): v
+        for k, v in _env(
+            ENVIRONMENT="production", PUBLIC_BASE_URL="https://aggregator.example.com"
+        ).items()
+    }
+
+    settings = Settings(_env_file=None, **values)
+
+    assert settings.allowed_origins == ("https://aggregator.example.com",)
+
+
+def test_sandbox_keeps_the_local_dev_server_origins() -> None:
+    """The counterpart: sandbox is meant to be driven from `make dev`, so the
+    Vite origins stay trusted there and the exclusion above is specific to
+    production rather than incidental.
+    """
+    values = {k.lower(): v for k, v in _env(ENVIRONMENT="sandbox").items()}
+
+    settings = Settings(_env_file=None, **values)
+
+    assert "http://127.0.0.1:5173" in settings.allowed_origins
+    assert "http://localhost:5173" in settings.allowed_origins
