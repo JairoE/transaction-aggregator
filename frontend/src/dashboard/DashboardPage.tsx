@@ -117,7 +117,11 @@ export function DashboardPage() {
   }
 
   return (
-    <AppShell currentStep={hasQuery ? 4 : 3} statusPillText={statusPillText}>
+    <AppShell
+      currentStep={hasQuery ? 4 : 3}
+      statusPillText={statusPillText}
+      actionLink={{ label: 'Manage connections', to: '/connections' }}
+    >
       <main className="dashboard-page">
         <p className="eyebrow">{buildFleetSummary(cardCount, bankCount)}</p>
         <h1>{hasQuery ? 'Search results' : 'Your credit cards'}</h1>
