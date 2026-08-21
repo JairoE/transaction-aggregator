@@ -63,3 +63,43 @@ async def test_unknown_host_is_rejected(client: AsyncClient) -> None:
     response = await client.get("/api/health", headers={"Host": "evil.example.com"})
 
     assert response.status_code == 400
+
+
+async def test_missing_host_header_is_rejected(app) -> None:
+    """A Host header that is absent entirely must be rejected like an unknown
+    one, rather than falling through the allowlist as an empty string. httpx
+    always synthesizes a Host from the base URL, so this drives the ASGI app
+    directly to omit the header a real client could still withhold.
+    """
+    messages: list[dict] = []
+
+    async def receive() -> dict:
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    async def send(message: dict) -> None:
+        messages.append(message)
+
+    await app(
+        {
+            "type": "http",
+            "asgi": {"version": "3.0", "spec_version": "2.1"},
+            "http_version": "1.1",
+            "method": "GET",
+            "scheme": "http",
+            "path": "/api/health",
+            "raw_path": b"/api/health",
+            "query_string": b"",
+            "root_path": "",
+            "headers": [],
+            "client": ("127.0.0.1", 54321),
+            "server": ("127.0.0.1", 8000),
+        },
+        receive,
+        send,
+    )
+
+    start = next(m for m in messages if m["type"] == "http.response.start")
+    body = b"".join(m.get("body", b"") for m in messages if m["type"] == "http.response.body")
+
+    assert start["status"] == 400
+    assert b"HOST_NOT_ALLOWED" in body
