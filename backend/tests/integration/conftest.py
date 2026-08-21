@@ -130,3 +130,24 @@ def create_sandbox_public_token(
 def exchange_sandbox_item(gateway: PlaidPythonGateway, institution_id: str) -> str:
     public_token = create_sandbox_public_token(gateway, institution_id)
     return gateway.exchange_public_token(public_token).access_token
+
+
+def lookup_institution_name(
+    gateway: PlaidPythonGateway, institution_id: str
+) -> str | None:
+    """Resolve an institution ID against Plaid's registry, or None if it is
+    unknown there. Used to detect an allowlist that has drifted out of date.
+    """
+    from plaid.model.country_code import CountryCode
+    from plaid.model.institutions_get_by_id_request import InstitutionsGetByIdRequest
+
+    try:
+        response = gateway._client.institutions_get_by_id(
+            InstitutionsGetByIdRequest(
+                institution_id=institution_id,
+                country_codes=[CountryCode("US")],
+            )
+        )
+    except Exception:  # noqa: BLE001 - an unknown ID is a result, not an error
+        return None
+    return str(response["institution"]["name"])
