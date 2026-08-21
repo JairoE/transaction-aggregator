@@ -38,8 +38,42 @@ deterministic in-process fixture bank — four institutions, eight credit cards,
 and ten `Paze` transactions — so the whole flow works without a Plaid account
 and without touching the network.
 
-To connect real banks, set `ENVIRONMENT=sandbox` (or `production`) with your
-Plaid credentials and a stable HTTPS URL. See [docs/operations.md](docs/operations.md).
+## Run it against real Plaid
+
+Set `ENVIRONMENT=sandbox` to exercise the real Plaid API without spending
+anything, or `ENVIRONMENT=production` to connect actual bank accounts. Both
+need your Plaid `PLAID_CLIENT_ID`/`PLAID_SECRET` in `backend/.env`; production
+additionally requires a stable HTTPS URL in `PUBLIC_BASE_URL`, with
+`{PUBLIC_BASE_URL}/oauth-return` registered as the OAuth redirect URI in the
+Plaid dashboard. [docs/operations.md](docs/operations.md) covers the tunnel
+setup, key rotation, backups, and the full troubleshooting table.
+
+```bash
+make serve
+```
+
+**Open the HTTPS URL from `PUBLIC_BASE_URL` — not `http://127.0.0.1:8000`.**
+Whenever `PUBLIC_BASE_URL` is `https://`, the session cookie is marked `Secure`,
+and a browser will not store or return a `Secure` cookie over plain HTTP: you
+will appear signed out immediately after a successful sign-in. In `production`
+the CSRF origin allowlist also narrows to exactly `PUBLIC_BASE_URL` — the
+`localhost:5173` exceptions apply only to `demo`, `sandbox`, and `test` — so
+requests from any other origin come back as `403 ORIGIN_INVALID`. `make serve`
+builds the frontend and serves it from the backend's own origin for this
+reason; don't put `make dev` (Vite on `:5173`) in front of a production API.
+
+Two things to know before connecting a real bank:
+
+- **Plaid's Trial plan allows 10 production Items, cumulatively.** Removing a
+  connection does not give the slot back, and a connection that fails after the
+  Item was created still consumes one. The app keeps tombstone rows so its
+  count stays honest with Plaid's; `GET /api/connections` reports
+  `production_item_count` against the limit.
+- **`backend/.env` and `backend/data/` are gitignored**, so they do not travel
+  with a branch, merge, or worktree. Moving your setup somewhere else means
+  copying those two by hand — the encryption key in `.env` is what decrypts the
+  stored Plaid access tokens, so a mismatched key silently invalidates every
+  existing connection.
 
 ## Other commands
 
