@@ -15,6 +15,7 @@ from app.services.plaid_gateway import (
     PlaidAccount,
     PlaidGatewayError,
     PlaidTransaction,
+    PlaidUser,
     RefreshUnsupported,
     SyncMutationDuringPagination,
     SyncPage,
@@ -97,9 +98,12 @@ class FakePlaidGateway:
     _next_item_index: int = 0
 
     # --- gateway protocol -------------------------------------------------
-    def create_user(self, client_user_id: str) -> str:
+    def create_user(self, client_user_id: str) -> PlaidUser:
         self.created_users.append(client_user_id)
-        return f"plaid-user-{client_user_id}"
+        return PlaidUser(
+            user_id=f"plaid-user-{client_user_id}",
+            user_token=f"user-sandbox-{client_user_id}",
+        )
 
     def create_link_token(self, request: LinkTokenRequest) -> str:
         self.link_token_requests.append(request)

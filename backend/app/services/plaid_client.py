@@ -44,6 +44,7 @@ from app.services.plaid_gateway import (
     PlaidAccount,
     PlaidGatewayError,
     PlaidTransaction,
+    PlaidUser,
     RefreshUnsupported,
     SyncMutationDuringPagination,
     SyncPage,
@@ -95,7 +96,7 @@ class PlaidPythonGateway:
         self._settings = settings
 
     # --- users ------------------------------------------------------------
-    def create_user(self, client_user_id: str) -> str:
+    def create_user(self, client_user_id: str) -> PlaidUser:
         from plaid.model.user_create_request import UserCreateRequest
 
         response = self._call(
@@ -103,7 +104,7 @@ class PlaidPythonGateway:
                 UserCreateRequest(client_user_id=client_user_id)
             )
         )
-        return str(response["user_id"])
+        return _build_plaid_user(response)
 
     # --- link -------------------------------------------------------------
     def create_link_token(self, request: LinkTokenRequest) -> str:
@@ -128,8 +129,8 @@ class PlaidPythonGateway:
             kwargs["account_filters"] = LinkTokenAccountFilters(
                 credit=CreditFilter(account_subtypes=_credit_card_subtypes())
             )
-            if request.plaid_user_id:
-                kwargs["user_token"] = request.plaid_user_id
+            if request.user_token:
+                kwargs["user_token"] = request.user_token
 
         response = self._call(
             lambda: self._client.link_token_create(LinkTokenCreateRequest(**kwargs))
@@ -315,6 +316,16 @@ def _extract_error(error: ApiException) -> tuple[str | None, str | None]:
     except (ValueError, TypeError):
         return None, None
     return body.get("error_code"), body.get("request_id")
+
+
+def _build_plaid_user(response: object) -> PlaidUser:
+    """A pure mapping, kept separate from `_call` so it is unit-testable
+    without a network call: construct a `UserCreateResponse` and pass it in.
+    """
+
+    return PlaidUser(
+        user_id=str(response["user_id"]), user_token=str(response["user_token"])
+    )
 
 
 def _transaction(row: object) -> PlaidTransaction:

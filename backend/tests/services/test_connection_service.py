@@ -320,3 +320,30 @@ async def test_two_link_tokens_at_nine_cannot_both_be_exchanged(
         )
 
     assert error.value.code == "TRIAL_LIMIT_REACHED"
+
+
+async def test_link_token_uses_the_user_token_not_the_user_id(
+    connection_service: ConnectionService, owner, fake_plaid
+) -> None:
+    """Regression: create_link_token must send Plaid's `user_token`, not the
+    permanent `user_id` that gets persisted on the owner row.
+    """
+
+    await connection_service.create_link_token(owner, "chase")
+
+    request = fake_plaid.link_token_requests[-1]
+    assert request.user_token is not None
+    assert request.user_token.startswith("user-sandbox-")
+    assert request.user_token != owner.plaid_user_id
+
+
+async def test_a_second_link_token_request_reuses_the_persisted_user_id(
+    connection_service: ConnectionService, owner, fake_plaid
+) -> None:
+    await connection_service.create_link_token(owner, "chase")
+    first_user_id = owner.plaid_user_id
+
+    await connection_service.create_link_token(owner, "citi")
+
+    assert owner.plaid_user_id == first_user_id
+    assert len(fake_plaid.created_users) == 2, "a fresh token is fetched each time"

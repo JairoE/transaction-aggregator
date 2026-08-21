@@ -57,12 +57,25 @@ def load_supported_banks(overrides_json: str | None) -> dict[str, SupportedBank]
 @dataclass(frozen=True)
 class LinkTokenRequest:
     client_user_id: str
-    plaid_user_id: str | None
+    user_token: str | None
     redirect_uri: str
     webhook_url: str | None
     institution_id: str | None = None
     access_token: str | None = None
     days_requested: int = DAYS_REQUESTED
+
+
+@dataclass(frozen=True)
+class PlaidUser:
+    """`/user/create`'s two distinct identifiers.
+
+    `user_id` is the permanent identifier worth persisting (FR-CONN-003).
+    `user_token` is a separate, differently-formatted value Link actually
+    requires; conflating the two produces Plaid's INVALID_USER_TOKEN error.
+    """
+
+    user_id: str
+    user_token: str
 
 
 @dataclass(frozen=True)
@@ -151,7 +164,7 @@ class RefreshUnsupported(Exception):
 
 
 class PlaidGateway(Protocol):
-    def create_user(self, client_user_id: str) -> str:
+    def create_user(self, client_user_id: str) -> PlaidUser:
         raise NotImplementedError
 
     def create_link_token(self, request: LinkTokenRequest) -> str:
@@ -234,6 +247,7 @@ __all__ = [
     "PlaidAccount",
     "PlaidGateway",
     "PlaidGatewayError",
+    "PlaidUser",
     "PlaidTransaction",
     "RefreshUnsupported",
     "RetryClass",

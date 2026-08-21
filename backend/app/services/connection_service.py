@@ -212,7 +212,7 @@ class ConnectionService:
         link_token = self._gateway.create_link_token(
             LinkTokenRequest(
                 client_user_id=owner.id,
-                plaid_user_id=plaid_user_id,
+                user_token=plaid_user_id,
                 redirect_uri=self._settings.oauth_redirect_uri,
                 webhook_url=(
                     str(self._settings.plaid_webhook_url)
@@ -242,7 +242,7 @@ class ConnectionService:
         link_token = self._gateway.create_link_token(
             LinkTokenRequest(
                 client_user_id=owner.id,
-                plaid_user_id=plaid_user_id,
+                user_token=plaid_user_id,
                 redirect_uri=self._settings.oauth_redirect_uri,
                 webhook_url=(
                     str(self._settings.plaid_webhook_url)
@@ -447,15 +447,22 @@ class ConnectionService:
         return int(count)
 
     async def _ensure_plaid_user(self, owner: Owner) -> str | None:
-        if owner.plaid_user_id:
-            return owner.plaid_user_id
+        """Return a fresh `user_token` for this Link session.
+
+        `/user/create` is idempotent on `client_user_id`: repeat calls return
+        the same permanent `user_id` (persisted below, satisfying
+        FR-CONN-003) alongside a new `user_token`, which is the value Link
+        actually requires and is not meant to be cached indefinitely.
+        """
+
         try:
-            plaid_user_id = self._gateway.create_user(owner.id)
+            plaid_user = self._gateway.create_user(owner.id)
         except Exception:
             return None
-        owner.plaid_user_id = plaid_user_id
-        await self._session.flush()
-        return plaid_user_id
+        if owner.plaid_user_id != plaid_user.user_id:
+            owner.plaid_user_id = plaid_user.user_id
+            await self._session.flush()
+        return plaid_user.user_token
 
     def _decrypt_access_token(self, connection: BankConnection) -> str:
         if (

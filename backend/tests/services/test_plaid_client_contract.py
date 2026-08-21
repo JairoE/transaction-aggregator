@@ -116,3 +116,24 @@ def test_gateway_constructs_against_both_hosts(production_settings: Settings) ->
     from app.services.plaid_client import PlaidPythonGateway
 
     assert PlaidPythonGateway(production_settings) is not None
+
+
+def test_user_create_response_yields_distinct_id_and_token() -> None:
+    """The two fields have different formats; conflating them produces
+    Plaid's INVALID_USER_TOKEN error on the following link_token_create call.
+    """
+
+    from plaid.model.user_create_response import UserCreateResponse
+
+    from app.services.plaid_client import _build_plaid_user
+
+    response = UserCreateResponse(
+        user_id="66125e2b-9d4d-4a1b-9f3a-000000000000",
+        user_token="user-sandbox-66125e2b-9d4d-4a1b-9f3a-000000000000",
+        request_id="req-1",
+    )
+
+    plaid_user = _build_plaid_user(response)
+
+    assert plaid_user.user_id != plaid_user.user_token
+    assert plaid_user.user_token.startswith("user-sandbox-")

@@ -22,6 +22,7 @@ from app.services.plaid_gateway import (
     PlaidAccount,
     PlaidGatewayError,
     PlaidTransaction,
+    PlaidUser,
     RefreshUnsupported,
     SyncPage,
 )
@@ -259,8 +260,11 @@ class DemoPlaidGateway:
                 return bank
         raise PlaidGatewayError("ITEM_NOT_FOUND", "permanent")
 
-    def create_user(self, client_user_id: str) -> str:
-        return f"demo-user-{client_user_id}"
+    def create_user(self, client_user_id: str) -> PlaidUser:
+        return PlaidUser(
+            user_id=f"demo-user-{client_user_id}",
+            user_token=f"user-sandbox-demo-{client_user_id}",
+        )
 
     def create_link_token(self, request: LinkTokenRequest) -> str:
         self.link_token_requests.append(request)

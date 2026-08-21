@@ -252,3 +252,31 @@ async def test_a_failing_bank_does_not_hide_a_healthy_one(
     assert citi["action"] == "reconnect"
     assert citi["card_count"] == 2, "cached cards remain visible"
     assert "ITEM_LOGIN_REQUIRED" not in citi["message"]
+
+
+async def test_a_plaid_failure_returns_a_typed_error_not_a_500(
+    authenticated_client: AsyncClient, csrf_token: str, fake_plaid
+) -> None:
+    from app.services.plaid_gateway import PlaidGatewayError
+
+    fake_plaid.link_token_requests = fake_plaid.link_token_requests  # no-op, keep fixture
+    original = fake_plaid.create_link_token
+
+    def failing(request):
+        raise PlaidGatewayError("INVALID_USER_TOKEN", "permanent")
+
+    fake_plaid.create_link_token = failing  # type: ignore[method-assign]
+    try:
+        response = await authenticated_client.post(
+            "/api/connections/link-token",
+            headers={"X-CSRF-Token": csrf_token},
+            json={"bank": "chase"},
+        )
+    finally:
+        fake_plaid.create_link_token = original  # type: ignore[method-assign]
+
+    assert response.status_code == 502
+    body = response.json()
+    assert body["code"] == "PLAID_UNAVAILABLE"
+    assert "INVALID_USER_TOKEN" not in response.text
+    assert "Traceback" not in response.text

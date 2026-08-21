@@ -18,6 +18,7 @@ from app.api import webhooks as webhooks_api
 from app.config import Settings, get_settings
 from app.db import Database, create_database
 from app.errors import AppError
+from app.services.plaid_gateway import PlaidGatewayError as _PlaidGatewayError
 from app.logging import configure_logging
 from app.middleware import (
     RequestContextMiddleware,
@@ -134,6 +135,28 @@ def create_app(
             content={
                 "code": "REQUEST_INVALID",
                 "message": "The request could not be processed.",
+            },
+        )
+
+    @app.exception_handler(_PlaidGatewayError)
+    async def handle_plaid_error(
+        _: Request, error: _PlaidGatewayError
+    ) -> JSONResponse:
+        """Any Plaid failure surfaced synchronously (Link, exchange, update,
+        disconnect) gets a stable typed response instead of a 500. The sync
+        worker's own retry/backoff path classifies these separately; this
+        only covers requests made directly from a route handler.
+        """
+
+        status = 503 if error.retry_class == "transient" else 502
+        return JSONResponse(
+            status_code=status,
+            content={
+                "code": "PLAID_UNAVAILABLE",
+                "message": (
+                    "The bank could not complete this request right now. "
+                    "Please try again in a moment."
+                ),
             },
         )
 
