@@ -85,6 +85,15 @@ Runs the backend suite, the frontend suite, TypeScript, and the production
 build. `make dev` runs the Vite dev server against a separately running API;
 `make e2e` runs the Playwright flows.
 
+```bash
+make sync
+```
+
+Reinstalls dependencies and applies migrations. Run it after pulling a merged
+branch — stale `node_modules` or an un-migrated schema will otherwise surface
+as a confusing `make serve` failure. It does not touch `backend/.env` or
+`backend/data/`.
+
 ## Layout
 
 - `backend/` — FastAPI, SQLAlchemy 2, Alembic, SQLite in WAL mode with an FTS5
