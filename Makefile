@@ -1,4 +1,4 @@
-.PHONY: install sync test typecheck build dev serve e2e migrate check owner keys
+.PHONY: install sync test test-sandbox typecheck build dev serve e2e migrate check owner keys
 
 install:
 	uv sync --project backend --all-groups
@@ -9,6 +9,11 @@ sync: install migrate
 test:
 	uv run --directory backend pytest -q
 	pnpm --dir frontend test
+
+# Live Plaid Sandbox. Needs PLAID_SANDBOX_CLIENT_ID and PLAID_SANDBOX_SECRET;
+# skips cleanly without them. Consumes no Trial Item slots.
+test-sandbox:
+	uv run --directory backend pytest -m plaid_sandbox -q -rs
 
 typecheck:
 	pnpm --dir frontend typecheck

@@ -94,6 +94,25 @@ branch — stale `node_modules` or an un-migrated schema will otherwise surface
 as a confusing `make serve` failure. It does not touch `backend/.env` or
 `backend/data/`.
 
+```bash
+make test-sandbox
+```
+
+Runs the suite against the real Plaid Sandbox API. It is excluded from
+`make test` because it needs the network, and it skips unless
+`PLAID_SANDBOX_CLIENT_ID` and `PLAID_SANDBOX_SECRET` (Plaid dashboard → Keys →
+Sandbox) are exported. Sandbox consumes **no** Trial Item slots — that budget
+is production-only — and `/sandbox/public_token/create` mints tokens without
+Link, so the whole exchange → sync → remove path runs unattended.
+
+These exist because the in-process fakes agree with themselves: they cannot
+notice that Plaid returns two different identifiers from `/user/create`, or
+that an institution changed its `institution_id`. Both reached production. The
+credentials are read from dedicated `PLAID_SANDBOX_*` variables rather than the
+app's own, so a run can never silently borrow production keys. Tests that
+create link tokens additionally need `PLAID_SANDBOX_REDIRECT_BASE_URL` set to a
+base URL whose `/oauth-return` is registered in the Plaid dashboard.
+
 ## Layout
 
 - `backend/` — FastAPI, SQLAlchemy 2, Alembic, SQLite in WAL mode with an FTS5
