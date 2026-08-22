@@ -1,13 +1,13 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
-import { CheckIcon } from './icons'
+import { CheckIcon, DotIcon } from './icons'
 
 const STEPS = [
-  { step: 1, label: 'Sign in', description: 'Secure owner access' },
-  { step: 2, label: 'Connect banks', description: 'Add your card accounts' },
-  { step: 3, label: 'View cards', description: 'Review recent activity' },
-  { step: 4, label: 'Search Paze', description: 'Find any transaction' },
+  { step: 1, label: 'Sign in', description: 'Secure owner access', to: '/' },
+  { step: 2, label: 'Connect banks', description: 'Add your card accounts', to: '/connections' },
+  { step: 3, label: 'View cards', description: 'Review recent activity', to: '/dashboard' },
+  { step: 4, label: 'Search history', description: 'Review recent phrases', to: '/search-history' },
 ] as const
 
 export interface AppShellActionLink {
@@ -59,7 +59,7 @@ export function AppShell({ currentStep, statusPillText, actionLink, children }: 
             <p>Four focused steps from secure sign-in to any transaction.</p>
           </div>
           <ol className="journey-steps">
-            {STEPS.map(({ step, label, description }) => {
+            {STEPS.map(({ step, label, description, to }) => {
               const isComplete = step < currentStep
               const isCurrent = step === currentStep
               const stateClass = isComplete
@@ -74,15 +74,17 @@ export function AppShell({ currentStep, statusPillText, actionLink, children }: 
                   className={`journey-step ${stateClass}`}
                   aria-current={isCurrent ? 'step' : undefined}
                 >
-                  <span className="journey-step__marker" aria-hidden="true">
-                    {isComplete ? <CheckIcon /> : String(step).padStart(2, '0')}
-                  </span>
-                  <span className="journey-step__copy">
-                    {isComplete && <span className="sr-only">Completed: </span>}
-                    {isCurrent && <span className="sr-only">Current: </span>}
-                    <strong>{label}</strong>
-                    <span className="journey-step__description">{description}</span>
-                  </span>
+                  <Link className="journey-step__link" to={to}>
+                    <span className="journey-step__marker" aria-hidden="true">
+                      {isComplete ? <CheckIcon /> : <DotIcon />}
+                    </span>
+                    <span className="journey-step__copy">
+                      {isComplete && <span className="sr-only">Completed: </span>}
+                      {isCurrent && <span className="sr-only">Current: </span>}
+                      <strong>{label}</strong>
+                      <span className="journey-step__description">{description}</span>
+                    </span>
+                  </Link>
                 </li>
               )
             })}

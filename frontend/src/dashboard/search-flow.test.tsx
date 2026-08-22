@@ -33,7 +33,7 @@ describe('explicit search submission flow', () => {
     await renderDashboard()
     expect(requestedQueries).toEqual([''])
 
-    const input = screen.getByRole('searchbox', { name: /search every card/i })
+    const input = screen.getByRole('searchbox', { name: /search transactions/i })
     await user.type(input, 'Paze')
     expect(requestedQueries).toEqual([''])
 
@@ -47,7 +47,7 @@ describe('explicit search submission flow', () => {
     const user = userEvent.setup()
     await renderDashboard()
 
-    const input = screen.getByRole('searchbox', { name: /search every card/i })
+    const input = screen.getByRole('searchbox', { name: /search transactions/i })
     await user.type(input, 'Paze{Enter}')
 
     expect(
@@ -61,7 +61,7 @@ describe('explicit search submission flow', () => {
     const user = userEvent.setup()
     await renderDashboard()
 
-    await user.type(screen.getByRole('searchbox', { name: /search every card/i }), 'Paze')
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze')
     await user.click(screen.getByRole('button', { name: /^search$/i }))
 
     expect(
@@ -69,12 +69,32 @@ describe('explicit search submission flow', () => {
     ).toBeInTheDocument()
   })
 
+  it('persists only the submitted phrase and timestamp for this owner', async () => {
+    server.use(searchHandler((query) => (query ? pazeSearchResponse() : recentSearchResponse())))
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
+    await screen.findByText(/10 matches for/i)
+
+    expect(window.localStorage).toHaveLength(1)
+    const key = window.localStorage.key(0)
+    expect(key).toBe('ta:search-history:owner-1')
+
+    const raw = window.localStorage.getItem(key ?? '')
+    expect(JSON.parse(raw ?? 'null')).toEqual([
+      { query: 'Paze', searchedAt: expect.any(Number) },
+    ])
+    expect(raw).not.toContain('groups')
+    expect(raw).not.toContain('transactions')
+  })
+
   it('restores recent cached transactions on an empty submit', async () => {
     server.use(searchHandler((query) => (query ? pazeSearchResponse() : recentSearchResponse())))
     const user = userEvent.setup()
     await renderDashboard()
 
-    const input = screen.getByRole('searchbox', { name: /search every card/i })
+    const input = screen.getByRole('searchbox', { name: /search transactions/i })
     await user.type(input, 'Paze{Enter}')
     await screen.findByText(/10 matches for/i)
 
@@ -82,7 +102,23 @@ describe('explicit search submission flow', () => {
 
     await screen.findByText(/showing recent cached transactions on every card/i)
     expect(screen.getByRole('heading', { name: /your credit cards/i })).toBeInTheDocument()
-    expect(screen.getByRole('searchbox', { name: /search every card/i })).toHaveValue('')
+    expect(screen.getByRole('searchbox', { name: /search transactions/i })).toHaveValue('')
+  })
+
+  it('clears an active search when the rail navigates to View cards', async () => {
+    server.use(searchHandler((query) => (query ? pazeSearchResponse() : recentSearchResponse())))
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
+    await screen.findByRole('heading', { name: /search results/i })
+
+    await user.click(screen.getByRole('link', { name: /view cards/i }))
+
+    expect(await screen.findByRole('heading', { name: /your credit cards/i })).toBeInTheDocument()
+    expect(screen.getByRole('searchbox', { name: /search transactions/i })).toHaveValue('')
+    expect(window.location.pathname).toBe('/dashboard')
+    expect(window.location.search).toBe('')
   })
 
   it('cancels stale in-flight results — a slow first response never overwrites a newer search — and resets every cursor', async () => {
@@ -112,7 +148,7 @@ describe('explicit search submission flow', () => {
     const user = userEvent.setup()
     await renderDashboard()
 
-    const input = screen.getByRole('searchbox', { name: /search every card/i })
+    const input = screen.getByRole('searchbox', { name: /search transactions/i })
     await user.type(input, 'slowterm{Enter}')
     await user.clear(input)
     await user.type(input, 'Paze{Enter}')

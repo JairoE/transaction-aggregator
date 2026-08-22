@@ -168,8 +168,15 @@ test('owner connects four banks and searches every card at once', async ({ page 
     await connectBank(page, bank)
   }
   await expect(page.getByText('4 of 4 connected')).toBeVisible()
+  await expect
+    .poll(async () => {
+      const response = await page.request.get('/api/connections')
+      const data = (await response.json()) as { banks: Array<{ state: string }> }
+      return data.banks.every((bank) => bank.state === 'ready')
+    })
+    .toBe(true)
 
-  await page.getByRole('button', { name: 'View dashboard' }).click()
+  await page.getByRole('button', { name: 'View cards' }).click()
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
 
   // Every authorized credit card gets its own panel.
@@ -178,7 +185,7 @@ test('owner connects four banks and searches every card at once', async ({ page 
   }
 
   // Typing alone must not search.
-  const search = page.getByRole('searchbox', { name: /Search every card/i })
+  const search = page.getByRole('searchbox', { name: /Search transactions/i })
   await search.fill('Paze')
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
 

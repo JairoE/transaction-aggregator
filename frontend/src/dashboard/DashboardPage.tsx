@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { apiClient } from '../api/client'
 import type { components } from '../api/generated'
 import { useAuth } from '../auth/AuthProvider'
@@ -14,6 +15,7 @@ import { SearchQueryProvider } from './SearchContext'
 import { fetchCardTransactions, fetchTransactionSearch } from './api'
 import { buildFleetSummary, buildResultsSummary, formatSyncStatus } from './format'
 import { persistSearchResult, readPersistedSearchResult } from './searchCache'
+import { recordSearchHistory } from './searchHistory'
 
 type ConnectionsResponse = components['schemas']['ConnectionsResponse']
 
@@ -27,7 +29,8 @@ interface CardPageState {
 export function DashboardPage() {
   const { owner } = useAuth()
   const isOnline = useOnlineStatus()
-  const [submittedQuery, setSubmittedQuery] = useState('')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const submittedQuery = searchParams.get('q')?.trim() ?? ''
   const [pageState, setPageState] = useState<Record<string, CardPageState>>({})
 
   // Connection health for `CacheStatusBanner`. Shares its query key with
@@ -112,13 +115,20 @@ export function DashboardPage() {
   const hasQuery = submittedQuery.trim().length > 0
   const statusPillText = formatSyncStatus(searchQuery.data?.cache_as_of ?? null)
 
+  function handleSearchSubmit(query: string) {
+    if (owner) {
+      recordSearchHistory(owner.id, query)
+    }
+    setSearchParams(query ? { q: query } : {}, { replace: true })
+  }
+
   if (!owner) {
     return null
   }
 
   return (
     <AppShell
-      currentStep={hasQuery ? 4 : 3}
+      currentStep={3}
       statusPillText={statusPillText}
       actionLink={{ label: 'Manage connections', to: '/connections' }}
     >
@@ -134,7 +144,7 @@ export function DashboardPage() {
         <SearchBar
           initialQuery={submittedQuery}
           pending={searchQuery.isFetching}
-          onSubmit={setSubmittedQuery}
+          onSubmit={handleSearchSubmit}
         />
 
         <CacheStatusBanner
@@ -154,7 +164,7 @@ export function DashboardPage() {
             <button
               type="button"
               className="dashboard-page__clear"
-              onClick={() => setSubmittedQuery('')}
+              onClick={() => handleSearchSubmit('')}
             >
               Clear search
             </button>

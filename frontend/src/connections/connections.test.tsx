@@ -49,13 +49,21 @@ describe('bank connections', () => {
 
     const progress = screen.getByRole('complementary', { name: 'Setup progress' })
     const steps = within(progress).getAllByRole('listitem')
+    const links = within(progress).getAllByRole('link')
 
     expect(steps).toHaveLength(4)
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/',
+      '/connections',
+      '/dashboard',
+      '/search-history',
+    ])
     expect(steps[0]).toHaveTextContent('Completed: Sign in')
     expect(steps[1]).toHaveAttribute('aria-current', 'step')
     expect(steps[1]).toHaveTextContent('Current: Connect banks')
     expect(steps[2]).toHaveTextContent('View cards')
-    expect(steps[3]).toHaveTextContent('Search Paze')
+    expect(steps[3]).toHaveTextContent('Search history')
+    expect(progress).not.toHaveTextContent(/\b0[1-4]\b/)
   })
 
   it('has no detectable accessibility violations on the connections view', async () => {

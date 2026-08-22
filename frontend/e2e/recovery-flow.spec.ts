@@ -27,6 +27,13 @@ async function connectAll(page: Page): Promise<void> {
     ).toBeHidden()
   }
   await expect(page.getByText('4 of 4 connected')).toBeVisible()
+  await expect
+    .poll(async () => {
+      const response = await page.request.get('/api/connections')
+      const data = (await response.json()) as { banks: Array<{ state: string }> }
+      return data.banks.every((bank) => bank.state === 'ready')
+    })
+    .toBe(true)
 }
 
 test('one failing bank never hides the healthy banks', async ({ page }) => {

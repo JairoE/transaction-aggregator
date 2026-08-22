@@ -35,7 +35,7 @@ describe('dashboard card grid', () => {
     server.use(searchHandler(() => recentSearchResponse()))
     await renderDashboard()
 
-    expect(screen.getAllByRole('searchbox', { name: /search every card/i })).toHaveLength(1)
+    expect(screen.getAllByRole('searchbox', { name: /search transactions/i })).toHaveLength(1)
     for (const card of DASHBOARD_CARDS) {
       expect(regionFor(card.mask ?? '')).toBeInTheDocument()
     }
@@ -59,7 +59,7 @@ describe('dashboard card grid', () => {
     const user = userEvent.setup()
     await renderDashboard()
 
-    await user.type(screen.getByRole('searchbox', { name: /search every card/i }), 'raremerchant{Enter}')
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'raremerchant{Enter}')
     await screen.findByText(/1 match for/i)
 
     for (const card of DASHBOARD_CARDS) {
@@ -81,7 +81,7 @@ describe('dashboard card grid', () => {
     )
     const user = userEvent.setup()
     await renderDashboard()
-    await user.type(screen.getByRole('searchbox', { name: /search every card/i }), 'Paze{Enter}')
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
     await screen.findByText(/10 matches for/i)
 
     const untouchedCard = DASHBOARD_CARDS[3]

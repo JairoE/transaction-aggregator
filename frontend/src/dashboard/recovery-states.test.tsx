@@ -187,7 +187,7 @@ describe('connection recovery states', () => {
     for (const card of DASHBOARD_CARDS) {
       expect(regionFor(card.mask ?? '')).toBeInTheDocument()
     }
-    expect(screen.getByRole('searchbox', { name: /search every card/i })).toBeEnabled()
+    expect(screen.getByRole('searchbox', { name: /search transactions/i })).toBeEnabled()
     expect(await screen.findByText(/1 of 4 banks need attention/i)).toBeInTheDocument()
   })
 
@@ -266,7 +266,7 @@ describe('connection recovery states', () => {
     for (const card of DASHBOARD_CARDS) {
       expect(regionFor(card.mask ?? '')).toBeInTheDocument()
     }
-    expect(screen.getByRole('searchbox', { name: /search every card/i })).toBeEnabled()
+    expect(screen.getByRole('searchbox', { name: /search transactions/i })).toBeEnabled()
   })
 
   it('disables Sync, Connect, Reconnect, and Disconnect controls while offline', async () => {

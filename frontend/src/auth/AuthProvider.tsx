@@ -10,6 +10,7 @@ import { ApiError, apiClient, setCsrfToken } from '../api/client'
 import type { components } from '../api/generated'
 import { clearLinkContinuation } from '../connections/linkContinuation'
 import { clearSearchCache } from '../dashboard/searchCache'
+import { readSearchHistory } from '../dashboard/searchHistory'
 
 export type SessionResponse = components['schemas']['SessionResponse']
 export type Owner = components['schemas']['OwnerResponse']
@@ -52,6 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     setCsrfToken(sessionQuery.data?.csrf_token ?? null)
   }, [sessionQuery.data])
+
+  useEffect(() => {
+    const ownerId = sessionQuery.data?.owner.id
+    if (ownerId) {
+      readSearchHistory(ownerId)
+    }
+  }, [sessionQuery.data?.owner.id])
 
   useEffect(() => {
     apiClient.onAuthRequired(() => {
