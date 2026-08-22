@@ -34,11 +34,12 @@ export function SearchBar({ initialQuery, pending, onSubmit }: SearchBarProps) {
   return (
     <form className="search-bar" role="search" aria-label="Transaction search" onSubmit={handleSubmit}>
       <div className="search-bar__field">
-        <label htmlFor="dashboard-search-input">Search every card</label>
+        <label htmlFor="dashboard-search-input">Search transactions</label>
         <input
           id="dashboard-search-input"
           type="search"
           value={draft}
+          maxLength={200}
           placeholder="Merchant or statement keyword"
           onChange={(event) => setDraft(event.target.value)}
         />

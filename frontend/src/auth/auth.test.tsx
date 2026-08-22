@@ -99,6 +99,10 @@ describe('owner sign-in', () => {
       logoutHandler(),
     )
     const user = userEvent.setup()
+    window.localStorage.setItem(
+      'ta:search-history:owner-1',
+      JSON.stringify([{ query: 'Paze', searchedAt: Date.now() }]),
+    )
     renderAppAt('/connections')
 
     expect(
@@ -110,5 +114,20 @@ describe('owner sign-in', () => {
     expect(
       await screen.findByRole('heading', { name: /find any credit-card transaction/i }),
     ).toBeInTheDocument()
+    expect(window.localStorage.getItem('ta:search-history:owner-1')).toContain('Paze')
+  })
+
+  it('prunes expired search phrases when an owner session loads', async () => {
+    server.use(authenticatedSessionHandler(), connectionsHandler(makeConnectionsResponse()))
+    const eightDaysAgo = Date.now() - 8 * 24 * 60 * 60 * 1000
+    window.localStorage.setItem(
+      'ta:search-history:owner-1',
+      JSON.stringify([{ query: 'expired phrase', searchedAt: eightDaysAgo }]),
+    )
+
+    renderAppAt('/connections')
+    await screen.findByRole('heading', { name: /connect your credit cards/i })
+
+    expect(window.localStorage.getItem('ta:search-history:owner-1')).toBeNull()
   })
 })

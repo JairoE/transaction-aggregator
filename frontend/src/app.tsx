@@ -6,6 +6,7 @@ import { LoginPage } from './auth/LoginPage'
 import { ConnectionsPage } from './connections/ConnectionsPage'
 import { OAuthReturnPage } from './connections/OAuthReturnPage'
 import { DashboardPage } from './dashboard/DashboardPage'
+import { SearchHistoryPage } from './dashboard/SearchHistoryPage'
 import { AppShell } from './shell/AppShell'
 
 function createQueryClient(): QueryClient {
@@ -54,6 +55,7 @@ function AppRoutes() {
         <Route path="/connections" element={<ConnectionsPage />} />
         <Route path="/oauth-return" element={<OAuthReturnPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
+        <Route path="/search-history" element={<SearchHistoryPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
