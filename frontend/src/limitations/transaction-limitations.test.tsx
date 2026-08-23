@@ -82,4 +82,40 @@ describe('transaction limitations page', () => {
 
     expect(screen.getByRole('alert')).toHaveTextContent(/select at least one card/i)
   })
+
+  it('creates a rolling rule with a validated number of days', async () => {
+    let body: unknown
+    const rollingRule = {
+      ...createdRule,
+      id: 'rule-rolling',
+      window: { type: 'rolling', days: 5 },
+    }
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({ rules: [], cards: [card] })),
+      http.post('/api/transaction-limitations', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(rollingRule, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/transaction-limitations')
+
+    await user.type(await screen.findByLabelText(/keyword or phrase/i), 'Dunkin’ Donuts')
+    await user.clear(screen.getByLabelText(/transaction threshold/i))
+    await user.type(screen.getByLabelText(/transaction threshold/i), '5')
+    await user.click(screen.getByRole('radio', { name: /last n days/i }))
+    await user.clear(screen.getByLabelText(/number of days/i))
+    await user.type(screen.getByLabelText(/number of days/i), '5')
+    await user.click(screen.getByRole('button', { name: /save rule/i }))
+
+    expect(body).toEqual({
+      keyword: 'Dunkin’ Donuts',
+      threshold: 5,
+      card_scope: 'all_cards',
+      card_ids: [],
+      window: { type: 'rolling', days: 5 },
+      is_enabled: true,
+    })
+  })
 })

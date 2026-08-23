@@ -8,6 +8,12 @@ interface Props {
   onDelete: (rule: TransactionLimitationResponse) => void
 }
 
+function windowSummary(rule: TransactionLimitationResponse): string {
+  return rule.window.type === 'rolling'
+    ? `Last ${rule.window.days} days`
+    : 'All available history'
+}
+
 export function TransactionLimitationList({ rules, busyRuleId, onEdit, onToggle, onDelete }: Props) {
   if (rules.length === 0) {
     return <p className="limitation-list__empty">No transaction limitation rules yet.</p>
@@ -20,7 +26,7 @@ export function TransactionLimitationList({ rules, busyRuleId, onEdit, onToggle,
           <article className="limitation-rule" key={rule.id}>
             <div>
               <h3>{rule.keyword}</h3>
-              <p>{rule.threshold} transactions · All available history</p>
+              <p>{rule.threshold} transactions · {windowSummary(rule)}</p>
               <p>{rule.card_scope === 'all_cards' ? 'Every card independently' : `${rule.card_ids.length} selected cards`}</p>
               <span className="status-chip">{rule.is_enabled ? 'Enabled' : 'Disabled'}</span>
             </div>

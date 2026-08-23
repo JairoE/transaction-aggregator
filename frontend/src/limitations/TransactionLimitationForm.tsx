@@ -18,6 +18,12 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
   const [threshold, setThreshold] = useState(String(initialRule?.threshold ?? 1))
   const [scope, setScope] = useState<'all_cards' | 'selected_cards'>(initialRule?.card_scope ?? 'all_cards')
   const [cardIds, setCardIds] = useState<string[]>(initialRule?.card_ids ?? [])
+  const [windowType, setWindowType] = useState<'all_time' | 'rolling'>(
+    initialRule?.window.type ?? 'all_time',
+  )
+  const [rollingDays, setRollingDays] = useState(
+    String(initialRule?.window.type === 'rolling' ? initialRule.window.days : 5),
+  )
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -25,6 +31,8 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
     setThreshold(String(initialRule?.threshold ?? 1))
     setScope(initialRule?.card_scope ?? 'all_cards')
     setCardIds(initialRule?.card_ids ?? [])
+    setWindowType(initialRule?.window.type ?? 'all_time')
+    setRollingDays(String(initialRule?.window.type === 'rolling' ? initialRule.window.days : 5))
     setError(null)
   }, [initialRule])
 
@@ -43,13 +51,23 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
       setError('Select at least one card.')
       return
     }
+    const parsedRollingDays = Number(rollingDays)
+    if (
+      windowType === 'rolling'
+      && (!Number.isInteger(parsedRollingDays) || parsedRollingDays < 1 || parsedRollingDays > 730)
+    ) {
+      setError('Enter a rolling window from 1 through 730 days.')
+      return
+    }
     setError(null)
     onSubmit({
       keyword: keyword.trim(),
       threshold: parsedThreshold,
       card_scope: scope,
       card_ids: scope === 'all_cards' ? [] : cardIds,
-      window: { type: 'all_time' },
+      window: windowType === 'rolling'
+        ? { type: 'rolling', days: parsedRollingDays }
+        : { type: 'all_time' },
       is_enabled: initialRule?.is_enabled ?? true,
     })
   }
@@ -118,9 +136,37 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
       <fieldset className="limitation-form__fieldset">
         <legend>Date window</legend>
         <label>
-          <input type="radio" checked readOnly />
+          <input
+            type="radio"
+            name="date-window"
+            checked={windowType === 'all_time'}
+            onChange={() => setWindowType('all_time')}
+          />
           All available history
         </label>
+        <label>
+          <input
+            type="radio"
+            name="date-window"
+            checked={windowType === 'rolling'}
+            onChange={() => setWindowType('rolling')}
+          />
+          Last N days
+        </label>
+        {windowType === 'rolling' && (
+          <div className="form-field">
+            <label htmlFor="limitation-rolling-days">Number of days</label>
+            <input
+              id="limitation-rolling-days"
+              type="number"
+              min={1}
+              max={730}
+              inputMode="numeric"
+              value={rollingDays}
+              onChange={(event) => setRollingDays(event.target.value)}
+            />
+          </div>
+        )}
       </fieldset>
       <div className="limitation-form__actions">
         <button type="submit" className="primary-button" disabled={busy}>

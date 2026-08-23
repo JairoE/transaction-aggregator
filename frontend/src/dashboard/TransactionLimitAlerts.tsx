@@ -1,4 +1,5 @@
 import type { TransactionLimitAlertResponse } from '../limitations/api'
+import { formatShortDate } from './format'
 
 interface Props {
   alerts: TransactionLimitAlertResponse[]
@@ -7,6 +8,9 @@ interface Props {
 function windowSummary(alert: TransactionLimitAlertResponse): string {
   if (alert.window.type === 'all_time') {
     return 'All available history'
+  }
+  if (alert.window.type === 'rolling') {
+    return `Last ${alert.window.days} days (${formatShortDate(alert.window.effective_start_date)}–${formatShortDate(alert.window.effective_end_date)})`
   }
   return 'Selected date window'
 }

@@ -302,8 +302,8 @@ export interface components {
         /** AllTimeWindow */
         AllTimeWindow: {
             /**
-             * Type
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             type: "all_time";
         };
@@ -437,7 +437,8 @@ export interface components {
             keyword: string;
             /** Threshold */
             threshold: number;
-            window: components["schemas"]["AllTimeWindow"];
+            /** Window */
+            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"];
         };
         /** EvaluatedAllTimeWindow */
         EvaluatedAllTimeWindow: {
@@ -452,10 +453,34 @@ export interface components {
             /** Start Date */
             start_date?: null;
             /**
-             * Type
-             * @constant
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
              */
             type: "all_time";
+        };
+        /** EvaluatedRollingWindow */
+        EvaluatedRollingWindow: {
+            /** Days */
+            days: number;
+            /**
+             * Effective End Date
+             * Format: date
+             */
+            effective_end_date: string;
+            /**
+             * Effective Start Date
+             * Format: date
+             */
+            effective_start_date: string;
+            /** End Date */
+            end_date?: null;
+            /** Start Date */
+            start_date?: null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rolling";
         };
         /** ExchangePublicTokenRequest */
         ExchangePublicTokenRequest: {
@@ -540,6 +565,16 @@ export interface components {
             /** Id */
             id: string;
         };
+        /** RollingWindow */
+        RollingWindow: {
+            /** Days */
+            days: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rolling";
+        };
         /** SessionResponse */
         SessionResponse: {
             /** Csrf Token */
@@ -611,7 +646,8 @@ export interface components {
             rule_id: string;
             /** Threshold */
             threshold: number;
-            window: components["schemas"]["EvaluatedAllTimeWindow"];
+            /** Window */
+            window: components["schemas"]["EvaluatedAllTimeWindow"] | components["schemas"]["EvaluatedRollingWindow"];
         };
         /** TransactionLimitationListResponse */
         TransactionLimitationListResponse: {
@@ -649,7 +685,8 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
-            window: components["schemas"]["AllTimeWindow"];
+            /** Window */
+            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"];
         };
         /** TransactionMatch */
         TransactionMatch: {
@@ -688,7 +725,8 @@ export interface components {
             keyword?: string | null;
             /** Threshold */
             threshold?: number | null;
-            window?: components["schemas"]["AllTimeWindow"] | null;
+            /** Window */
+            window?: (components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"]) | null;
         };
         /** ValidationError */
         ValidationError: {

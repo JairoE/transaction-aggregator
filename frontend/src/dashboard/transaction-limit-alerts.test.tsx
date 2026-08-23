@@ -71,4 +71,41 @@ describe('dashboard transaction-limit alerts', () => {
       /alerts are temporarily unavailable/i,
     )
   })
+
+  it('shows the server-evaluated inclusive range for rolling alerts', async () => {
+    const card = DASHBOARD_CARDS[0]
+    server.use(
+      authenticatedSessionHandler(),
+      searchHandler(() => recentSearchResponse()),
+      alertsHandler({
+        alerts: [{
+          rule_id: 'rule-rolling',
+          card,
+          keyword: 'Dunkin’ Donuts',
+          threshold: 5,
+          match_count: 5,
+          pending_count: 0,
+          window: {
+            type: 'rolling',
+            days: 5,
+            start_date: null,
+            end_date: null,
+            effective_start_date: '2026-08-18',
+            effective_end_date: '2026-08-22',
+          },
+        }],
+        evaluated_at: '2026-08-22T12:00:00Z',
+        as_of_date: '2026-08-22',
+        cache_as_of: null,
+      }),
+    )
+
+    renderAppAt('/dashboard')
+
+    const alert = await within(await screen.findByRole('region', {
+      name: new RegExp(`ending in ${card.mask}`, 'i'),
+    })).findByRole('alert')
+    expect(alert).toHaveTextContent(/last 5 days \(Aug 18–Aug 22\)/i)
+    expect(alert).toHaveTextContent(/0 pending/i)
+  })
 })

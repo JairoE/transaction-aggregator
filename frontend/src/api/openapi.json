@@ -379,7 +379,22 @@
             "type": "integer"
           },
           "window": {
-            "$ref": "#/components/schemas/AllTimeWindow"
+            "discriminator": {
+              "mapping": {
+                "all_time": "#/components/schemas/AllTimeWindow",
+                "rolling": "#/components/schemas/RollingWindow"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AllTimeWindow"
+              },
+              {
+                "$ref": "#/components/schemas/RollingWindow"
+              }
+            ],
+            "title": "Window"
           }
         },
         "required": [
@@ -423,6 +438,47 @@
           "type"
         ],
         "title": "EvaluatedAllTimeWindow",
+        "type": "object"
+      },
+      "EvaluatedRollingWindow": {
+        "properties": {
+          "days": {
+            "maximum": 730.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "effective_end_date": {
+            "format": "date",
+            "title": "Effective End Date",
+            "type": "string"
+          },
+          "effective_start_date": {
+            "format": "date",
+            "title": "Effective Start Date",
+            "type": "string"
+          },
+          "end_date": {
+            "title": "End Date",
+            "type": "null"
+          },
+          "start_date": {
+            "title": "Start Date",
+            "type": "null"
+          },
+          "type": {
+            "const": "rolling",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "days",
+          "effective_start_date",
+          "effective_end_date"
+        ],
+        "title": "EvaluatedRollingWindow",
         "type": "object"
       },
       "ExchangePublicTokenRequest": {
@@ -649,6 +705,27 @@
         "title": "OwnerResponse",
         "type": "object"
       },
+      "RollingWindow": {
+        "properties": {
+          "days": {
+            "maximum": 730.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "type": {
+            "const": "rolling",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "days"
+        ],
+        "title": "RollingWindow",
+        "type": "object"
+      },
       "SessionResponse": {
         "properties": {
           "csrf_token": {
@@ -839,7 +916,22 @@
             "type": "integer"
           },
           "window": {
-            "$ref": "#/components/schemas/EvaluatedAllTimeWindow"
+            "discriminator": {
+              "mapping": {
+                "all_time": "#/components/schemas/EvaluatedAllTimeWindow",
+                "rolling": "#/components/schemas/EvaluatedRollingWindow"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EvaluatedAllTimeWindow"
+              },
+              {
+                "$ref": "#/components/schemas/EvaluatedRollingWindow"
+              }
+            ],
+            "title": "Window"
           }
         },
         "required": [
@@ -926,7 +1018,22 @@
             "type": "string"
           },
           "window": {
-            "$ref": "#/components/schemas/AllTimeWindow"
+            "discriminator": {
+              "mapping": {
+                "all_time": "#/components/schemas/AllTimeWindow",
+                "rolling": "#/components/schemas/RollingWindow"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AllTimeWindow"
+              },
+              {
+                "$ref": "#/components/schemas/RollingWindow"
+              }
+            ],
+            "title": "Window"
           }
         },
         "required": [
@@ -1116,12 +1223,27 @@
           "window": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/AllTimeWindow"
+                "discriminator": {
+                  "mapping": {
+                    "all_time": "#/components/schemas/AllTimeWindow",
+                    "rolling": "#/components/schemas/RollingWindow"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AllTimeWindow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RollingWindow"
+                  }
+                ]
               },
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Window"
           }
         },
         "title": "UpdateTransactionLimitationRequest",
