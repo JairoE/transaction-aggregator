@@ -29,6 +29,10 @@ dev = [
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+addopts = "-m 'not performance'"
+markers = [
+  "performance: synthetic scale gates excluded from normal correctness runs",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["app"]

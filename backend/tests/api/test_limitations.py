@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 
+from freezegun import freeze_time
 from httpx import AsyncClient
 
 from app.models import BankConnection, CardAccount, Transaction
@@ -140,7 +141,8 @@ async def test_create_rolling_rule_returns_effective_window(
     assert created.status_code == 201, created.text
     assert created.json()["window"] == {"type": "rolling", "days": 5}
 
-    alerts = await authenticated_client.get("/api/transaction-limit-alerts")
+    with freeze_time("2026-08-23"):
+        alerts = await authenticated_client.get("/api/transaction-limit-alerts")
     assert alerts.status_code == 200
     assert alerts.json()["alerts"][0]["window"] == {
         "type": "rolling",

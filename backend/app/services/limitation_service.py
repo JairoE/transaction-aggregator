@@ -201,6 +201,10 @@ class LimitationService:
         ).scalars().all()
 
         alerts: list[ActiveTransactionLimitAlert] = []
+        evaluation_cache: dict[
+            tuple[str, tuple[str, ...], str, int | None, date | None, date | None],
+            list[tuple[str, int, int]],
+        ] = {}
         for rule in rules:
             target_ids = (
                 active_card_ids
@@ -248,24 +252,39 @@ class LimitationService:
                     effective_start_date=rule.start_date,
                     effective_end_date=rule.end_date,
                 )
-            statement = (
-                select(
-                    Transaction.card_account_id,
-                    func.count(Transaction.id),
-                    pending_count,
-                )
-                .where(Transaction.card_account_id.in_(target_ids))
-                .where(transaction_match_filter(normalized))
+            cache_key = (
+                normalized.normalized,
+                tuple(sorted(target_ids)),
+                rule.window_type,
+                rule.rolling_days,
+                rule.start_date,
+                rule.end_date,
             )
-            if date_filter is not None:
-                statement = statement.where(date_filter)
-            rows = (
-                await self._session.execute(
-                    statement.group_by(Transaction.card_account_id)
+            rows = evaluation_cache.get(cache_key)
+            if rows is None:
+                statement = (
+                    select(
+                        Transaction.card_account_id,
+                        func.count(Transaction.id),
+                        pending_count,
+                    )
+                    .where(Transaction.card_account_id.in_(target_ids))
+                    .where(transaction_match_filter(normalized))
                 )
-            ).all()
+                if date_filter is not None:
+                    statement = statement.where(date_filter)
+                raw_rows = (
+                    await self._session.execute(
+                        statement.group_by(Transaction.card_account_id)
+                    )
+                ).all()
+                rows = [
+                    (card_id, int(match_count), int(pending or 0))
+                    for card_id, match_count, pending in raw_rows
+                ]
+                evaluation_cache[cache_key] = rows
             for card_id, match_count, pending in rows:
-                if int(match_count) < rule.threshold:
+                if match_count < rule.threshold:
                     continue
                 alerts.append(
                     ActiveTransactionLimitAlert(
@@ -273,8 +292,8 @@ class LimitationService:
                         keyword=rule.keyword,
                         threshold=rule.threshold,
                         card=cards_by_id[card_id],
-                        match_count=int(match_count),
-                        pending_count=int(pending or 0),
+                        match_count=match_count,
+                        pending_count=pending,
                         window=evaluated_window,
                     )
                 )

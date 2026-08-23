@@ -8,6 +8,14 @@ search never calls a bank and keeps working offline.
 One search field sits above a grid of card panels. Searching `Paze` returns
 every match while keeping the results grouped card by card.
 
+Transaction limitations add informational count alerts—never transaction
+blocking—evaluated entirely from the local cache. Rules can target every card
+or selected cards, count pending transactions, and use all available history,
+a rolling number of days, or an inclusive fixed date range. Qualifying alerts
+remain grouped per card on the dashboard. See the
+[transaction limitations PRD](docs/features/transaction-limitations/PRD.md)
+for the full behavior contract.
+
 ## Run it (demo bank, no credentials needed)
 
 ```bash
