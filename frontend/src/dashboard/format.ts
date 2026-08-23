@@ -37,6 +37,16 @@ export function formatShortDate(isoDate: string): string {
   return new Intl.DateTimeFormat(locale(), { month: 'short', day: 'numeric' }).format(date)
 }
 
+/** Formats a `YYYY-MM-DD` date string as a medium label like "Jul 31, 2026". */
+export function formatDateWithYear(isoDate: string): string {
+  const date = new Date(`${isoDate}T00:00:00`)
+  return new Intl.DateTimeFormat(locale(), {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date)
+}
+
 /** Right-aligned header status pill text, derived from `cache_as_of`. */
 export function formatSyncStatus(cacheAsOf: string | null, now: Date = new Date()): string {
   if (!cacheAsOf) {

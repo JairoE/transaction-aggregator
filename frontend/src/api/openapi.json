@@ -382,6 +382,7 @@
             "discriminator": {
               "mapping": {
                 "all_time": "#/components/schemas/AllTimeWindow",
+                "fixed": "#/components/schemas/FixedWindow",
                 "rolling": "#/components/schemas/RollingWindow"
               },
               "propertyName": "type"
@@ -392,6 +393,9 @@
               },
               {
                 "$ref": "#/components/schemas/RollingWindow"
+              },
+              {
+                "$ref": "#/components/schemas/FixedWindow"
               }
             ],
             "title": "Window"
@@ -438,6 +442,48 @@
           "type"
         ],
         "title": "EvaluatedAllTimeWindow",
+        "type": "object"
+      },
+      "EvaluatedFixedWindow": {
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "null"
+          },
+          "effective_end_date": {
+            "format": "date",
+            "title": "Effective End Date",
+            "type": "string"
+          },
+          "effective_start_date": {
+            "format": "date",
+            "title": "Effective Start Date",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "type": {
+            "const": "fixed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "start_date",
+          "end_date",
+          "effective_start_date",
+          "effective_end_date"
+        ],
+        "title": "EvaluatedFixedWindow",
         "type": "object"
       },
       "EvaluatedRollingWindow": {
@@ -565,6 +611,32 @@
           "sync_job_id"
         ],
         "title": "ExchangeResponse",
+        "type": "object"
+      },
+      "FixedWindow": {
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "type": {
+            "const": "fixed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "start_date",
+          "end_date"
+        ],
+        "title": "FixedWindow",
         "type": "object"
       },
       "GroupedSearchResponse": {
@@ -919,6 +991,7 @@
             "discriminator": {
               "mapping": {
                 "all_time": "#/components/schemas/EvaluatedAllTimeWindow",
+                "fixed": "#/components/schemas/EvaluatedFixedWindow",
                 "rolling": "#/components/schemas/EvaluatedRollingWindow"
               },
               "propertyName": "type"
@@ -929,6 +1002,9 @@
               },
               {
                 "$ref": "#/components/schemas/EvaluatedRollingWindow"
+              },
+              {
+                "$ref": "#/components/schemas/EvaluatedFixedWindow"
               }
             ],
             "title": "Window"
@@ -1021,6 +1097,7 @@
             "discriminator": {
               "mapping": {
                 "all_time": "#/components/schemas/AllTimeWindow",
+                "fixed": "#/components/schemas/FixedWindow",
                 "rolling": "#/components/schemas/RollingWindow"
               },
               "propertyName": "type"
@@ -1031,6 +1108,9 @@
               },
               {
                 "$ref": "#/components/schemas/RollingWindow"
+              },
+              {
+                "$ref": "#/components/schemas/FixedWindow"
               }
             ],
             "title": "Window"
@@ -1226,6 +1306,7 @@
                 "discriminator": {
                   "mapping": {
                     "all_time": "#/components/schemas/AllTimeWindow",
+                    "fixed": "#/components/schemas/FixedWindow",
                     "rolling": "#/components/schemas/RollingWindow"
                   },
                   "propertyName": "type"
@@ -1236,6 +1317,9 @@
                   },
                   {
                     "$ref": "#/components/schemas/RollingWindow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FixedWindow"
                   }
                 ]
               },

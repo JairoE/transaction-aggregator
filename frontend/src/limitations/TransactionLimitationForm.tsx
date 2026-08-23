@@ -18,11 +18,17 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
   const [threshold, setThreshold] = useState(String(initialRule?.threshold ?? 1))
   const [scope, setScope] = useState<'all_cards' | 'selected_cards'>(initialRule?.card_scope ?? 'all_cards')
   const [cardIds, setCardIds] = useState<string[]>(initialRule?.card_ids ?? [])
-  const [windowType, setWindowType] = useState<'all_time' | 'rolling'>(
+  const [windowType, setWindowType] = useState<'all_time' | 'rolling' | 'fixed'>(
     initialRule?.window.type ?? 'all_time',
   )
   const [rollingDays, setRollingDays] = useState(
     String(initialRule?.window.type === 'rolling' ? initialRule.window.days : 5),
+  )
+  const [startDate, setStartDate] = useState(
+    initialRule?.window.type === 'fixed' ? initialRule.window.start_date : '',
+  )
+  const [endDate, setEndDate] = useState(
+    initialRule?.window.type === 'fixed' ? initialRule.window.end_date : '',
   )
   const [error, setError] = useState<string | null>(null)
 
@@ -33,6 +39,8 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
     setCardIds(initialRule?.card_ids ?? [])
     setWindowType(initialRule?.window.type ?? 'all_time')
     setRollingDays(String(initialRule?.window.type === 'rolling' ? initialRule.window.days : 5))
+    setStartDate(initialRule?.window.type === 'fixed' ? initialRule.window.start_date : '')
+    setEndDate(initialRule?.window.type === 'fixed' ? initialRule.window.end_date : '')
     setError(null)
   }, [initialRule])
 
@@ -59,6 +67,14 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
       setError('Enter a rolling window from 1 through 730 days.')
       return
     }
+    if (windowType === 'fixed' && (!startDate || !endDate)) {
+      setError('Enter both a start date and an end date.')
+      return
+    }
+    if (windowType === 'fixed' && startDate > endDate) {
+      setError('End date must be on or after the start date.')
+      return
+    }
     setError(null)
     onSubmit({
       keyword: keyword.trim(),
@@ -67,7 +83,9 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
       card_ids: scope === 'all_cards' ? [] : cardIds,
       window: windowType === 'rolling'
         ? { type: 'rolling', days: parsedRollingDays }
-        : { type: 'all_time' },
+        : windowType === 'fixed'
+          ? { type: 'fixed', start_date: startDate, end_date: endDate }
+          : { type: 'all_time' },
       is_enabled: initialRule?.is_enabled ?? true,
     })
   }
@@ -153,6 +171,15 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
           />
           Last N days
         </label>
+        <label>
+          <input
+            type="radio"
+            name="date-window"
+            checked={windowType === 'fixed'}
+            onChange={() => setWindowType('fixed')}
+          />
+          Fixed date range
+        </label>
         {windowType === 'rolling' && (
           <div className="form-field">
             <label htmlFor="limitation-rolling-days">Number of days</label>
@@ -165,6 +192,28 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
               value={rollingDays}
               onChange={(event) => setRollingDays(event.target.value)}
             />
+          </div>
+        )}
+        {windowType === 'fixed' && (
+          <div className="limitation-form__dates">
+            <div className="form-field">
+              <label htmlFor="limitation-start-date">Start date</label>
+              <input
+                id="limitation-start-date"
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+              />
+            </div>
+            <div className="form-field">
+              <label htmlFor="limitation-end-date">End date</label>
+              <input
+                id="limitation-end-date"
+                type="date"
+                value={endDate}
+                onChange={(event) => setEndDate(event.target.value)}
+              />
+            </div>
           </div>
         )}
       </fieldset>

@@ -108,4 +108,41 @@ describe('dashboard transaction-limit alerts', () => {
     expect(alert).toHaveTextContent(/last 5 days \(Aug 18–Aug 22\)/i)
     expect(alert).toHaveTextContent(/0 pending/i)
   })
+
+  it('shows the inclusive range for fixed-date alerts', async () => {
+    const card = DASHBOARD_CARDS[0]
+    server.use(
+      authenticatedSessionHandler(),
+      searchHandler(() => recentSearchResponse()),
+      alertsHandler({
+        alerts: [{
+          rule_id: 'rule-fixed',
+          card,
+          keyword: 'Paze',
+          threshold: 2,
+          match_count: 3,
+          pending_count: 1,
+          window: {
+            type: 'fixed',
+            days: null,
+            start_date: '2026-07-01',
+            end_date: '2026-07-31',
+            effective_start_date: '2026-07-01',
+            effective_end_date: '2026-07-31',
+          },
+        }],
+        evaluated_at: '2026-08-22T12:00:00Z',
+        as_of_date: '2026-08-22',
+        cache_as_of: null,
+      }),
+    )
+
+    renderAppAt('/dashboard')
+
+    const alert = await within(await screen.findByRole('region', {
+      name: new RegExp(`ending in ${card.mask}`, 'i'),
+    })).findByRole('alert')
+    expect(alert).toHaveTextContent(/Jul 1–Jul 31, 2026/i)
+    expect(alert).toHaveTextContent(/1 pending/i)
+  })
 })

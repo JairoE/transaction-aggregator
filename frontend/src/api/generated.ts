@@ -438,7 +438,7 @@ export interface components {
             /** Threshold */
             threshold: number;
             /** Window */
-            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"];
+            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"];
         };
         /** EvaluatedAllTimeWindow */
         EvaluatedAllTimeWindow: {
@@ -457,6 +457,36 @@ export interface components {
              * @enum {string}
              */
             type: "all_time";
+        };
+        /** EvaluatedFixedWindow */
+        EvaluatedFixedWindow: {
+            /** Days */
+            days?: null;
+            /**
+             * Effective End Date
+             * Format: date
+             */
+            effective_end_date: string;
+            /**
+             * Effective Start Date
+             * Format: date
+             */
+            effective_start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "fixed";
         };
         /** EvaluatedRollingWindow */
         EvaluatedRollingWindow: {
@@ -511,6 +541,24 @@ export interface components {
             institution_name: string;
             /** Sync Job Id */
             sync_job_id: string | null;
+        };
+        /** FixedWindow */
+        FixedWindow: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "fixed";
         };
         /** GroupedSearchResponse */
         GroupedSearchResponse: {
@@ -647,7 +695,7 @@ export interface components {
             /** Threshold */
             threshold: number;
             /** Window */
-            window: components["schemas"]["EvaluatedAllTimeWindow"] | components["schemas"]["EvaluatedRollingWindow"];
+            window: components["schemas"]["EvaluatedAllTimeWindow"] | components["schemas"]["EvaluatedRollingWindow"] | components["schemas"]["EvaluatedFixedWindow"];
         };
         /** TransactionLimitationListResponse */
         TransactionLimitationListResponse: {
@@ -686,7 +734,7 @@ export interface components {
              */
             updated_at: string;
             /** Window */
-            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"];
+            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"];
         };
         /** TransactionMatch */
         TransactionMatch: {
@@ -726,7 +774,7 @@ export interface components {
             /** Threshold */
             threshold?: number | null;
             /** Window */
-            window?: (components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"]) | null;
+            window?: (components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"]) | null;
         };
         /** ValidationError */
         ValidationError: {

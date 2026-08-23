@@ -118,4 +118,41 @@ describe('transaction limitations page', () => {
       is_enabled: true,
     })
   })
+
+  it('validates and creates an inclusive fixed date rule', async () => {
+    let body: unknown
+    const fixedRule = {
+      ...createdRule,
+      id: 'rule-fixed',
+      window: { type: 'fixed', start_date: '2026-07-01', end_date: '2026-07-31' },
+    }
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({ rules: [], cards: [card] })),
+      http.post('/api/transaction-limitations', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(fixedRule, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/transaction-limitations')
+
+    await user.type(await screen.findByLabelText(/keyword or phrase/i), 'Paze')
+    await user.click(screen.getByRole('radio', { name: /fixed date range/i }))
+    await user.type(screen.getByLabelText(/start date/i), '2026-07-31')
+    await user.type(screen.getByLabelText(/end date/i), '2026-07-01')
+    await user.click(screen.getByRole('button', { name: /save rule/i }))
+    expect(screen.getByRole('alert')).toHaveTextContent(/end date must be on or after/i)
+
+    await user.clear(screen.getByLabelText(/start date/i))
+    await user.type(screen.getByLabelText(/start date/i), '2026-07-01')
+    await user.clear(screen.getByLabelText(/end date/i))
+    await user.type(screen.getByLabelText(/end date/i), '2026-07-31')
+    await user.click(screen.getByRole('button', { name: /save rule/i }))
+
+    expect(body).toMatchObject({
+      keyword: 'Paze',
+      window: { type: 'fixed', start_date: '2026-07-01', end_date: '2026-07-31' },
+    })
+  })
 })

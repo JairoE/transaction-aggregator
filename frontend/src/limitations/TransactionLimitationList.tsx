@@ -9,9 +9,13 @@ interface Props {
 }
 
 function windowSummary(rule: TransactionLimitationResponse): string {
-  return rule.window.type === 'rolling'
-    ? `Last ${rule.window.days} days`
-    : 'All available history'
+  if (rule.window.type === 'rolling') {
+    return `Last ${rule.window.days} days`
+  }
+  if (rule.window.type === 'fixed') {
+    return `${rule.window.start_date} through ${rule.window.end_date}`
+  }
+  return 'All available history'
 }
 
 export function TransactionLimitationList({ rules, busyRuleId, onEdit, onToggle, onDelete }: Props) {
