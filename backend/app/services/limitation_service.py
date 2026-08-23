@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -111,6 +111,9 @@ class LimitationService:
             threshold=payload.threshold,
             card_scope=payload.card_scope,
             window_type=payload.window.type,
+            rolling_days=(
+                payload.window.days if payload.window.type == "rolling" else None
+            ),
             is_enabled=payload.is_enabled,
         )
         rule.card_links = [
@@ -144,6 +147,9 @@ class LimitationService:
             rule.card_scope = payload.card_scope
         if payload.window is not None:
             rule.window_type = payload.window.type
+            rule.rolling_days = (
+                payload.window.days if payload.window.type == "rolling" else None
+            )
         if payload.is_enabled is not None:
             rule.is_enabled = payload.is_enabled
         if payload.card_ids is not None:
@@ -199,16 +205,36 @@ class LimitationService:
             pending_count = func.sum(
                 case((Transaction.pending.is_(True), 1), else_=0)
             )
+            date_filter = None
+            evaluated_window = EvaluatedWindow(type="all_time")
+            if rule.window_type == "rolling":
+                assert rule.rolling_days is not None
+                start_date = today - timedelta(days=rule.rolling_days - 1)
+                effective_date = func.coalesce(
+                    Transaction.posted_date,
+                    Transaction.authorized_date,
+                )
+                date_filter = effective_date.between(start_date, today)
+                evaluated_window = EvaluatedWindow(
+                    type="rolling",
+                    days=rule.rolling_days,
+                    effective_start_date=start_date,
+                    effective_end_date=today,
+                )
+            statement = (
+                select(
+                    Transaction.card_account_id,
+                    func.count(Transaction.id),
+                    pending_count,
+                )
+                .where(Transaction.card_account_id.in_(target_ids))
+                .where(transaction_match_filter(normalized))
+            )
+            if date_filter is not None:
+                statement = statement.where(date_filter)
             rows = (
                 await self._session.execute(
-                    select(
-                        Transaction.card_account_id,
-                        func.count(Transaction.id),
-                        pending_count,
-                    )
-                    .where(Transaction.card_account_id.in_(target_ids))
-                    .where(transaction_match_filter(normalized))
-                    .group_by(Transaction.card_account_id)
+                    statement.group_by(Transaction.card_account_id)
                 )
             ).all()
             for card_id, match_count, pending in rows:
@@ -222,7 +248,7 @@ class LimitationService:
                         card=cards_by_id[card_id],
                         match_count=int(match_count),
                         pending_count=int(pending or 0),
-                        window=EvaluatedWindow(type="all_time"),
+                        window=evaluated_window,
                     )
                 )
 

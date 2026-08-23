@@ -214,7 +214,10 @@ class TransactionLimitation(TimestampMixin, Base):
             name="ck_limitation_card_scope",
         ),
         CheckConstraint(
-            "window_type = 'all_time'", name="ck_limitation_window_type"
+            "(window_type = 'all_time' AND rolling_days IS NULL) OR "
+            "(window_type = 'rolling' AND rolling_days IS NOT NULL "
+            "AND rolling_days BETWEEN 1 AND 730)",
+            name="ck_limitation_window_type",
         ),
     )
 
@@ -229,6 +232,7 @@ class TransactionLimitation(TimestampMixin, Base):
     window_type: Mapped[str] = mapped_column(
         String(16), nullable=False, default="all_time"
     )
+    rolling_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     owner: Mapped[Owner] = relationship(back_populates="transaction_limitations")

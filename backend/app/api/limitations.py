@@ -10,6 +10,8 @@ from app.schemas import (
     CardResponse,
     CreateTransactionLimitationRequest,
     EvaluatedAllTimeWindow,
+    EvaluatedRollingWindow,
+    RollingWindow,
     TransactionLimitationListResponse,
     TransactionLimitationResponse,
     TransactionLimitAlertListResponse,
@@ -49,13 +51,18 @@ def _card_response(card: CardRow) -> CardResponse:
 
 def _rule_response(result: RuleResult) -> TransactionLimitationResponse:
     rule = result.rule
+    window = (
+        RollingWindow(type="rolling", days=rule.rolling_days)
+        if rule.window_type == "rolling" and rule.rolling_days is not None
+        else AllTimeWindow(type="all_time")
+    )
     return TransactionLimitationResponse(
         id=rule.id,
         keyword=rule.keyword,
         threshold=rule.threshold,
         card_scope=rule.card_scope,  # type: ignore[arg-type]
         card_ids=result.card_ids,
-        window=AllTimeWindow(type="all_time"),
+        window=window,
         is_enabled=rule.is_enabled,
         needs_card_selection=rule.card_scope == "selected_cards" and not result.card_ids,
         created_at=rule.created_at,
@@ -66,6 +73,19 @@ def _rule_response(result: RuleResult) -> TransactionLimitationResponse:
 def _alert_response(
     alert: ActiveTransactionLimitAlert,
 ) -> TransactionLimitAlertResponse:
+    window = (
+        EvaluatedRollingWindow(
+            type="rolling",
+            days=alert.window.days,
+            effective_start_date=alert.window.effective_start_date,
+            effective_end_date=alert.window.effective_end_date,
+        )
+        if alert.window.type == "rolling"
+        and alert.window.days is not None
+        and alert.window.effective_start_date is not None
+        and alert.window.effective_end_date is not None
+        else EvaluatedAllTimeWindow(type="all_time")
+    )
     return TransactionLimitAlertResponse(
         rule_id=alert.rule_id,
         keyword=alert.keyword,
@@ -73,7 +93,7 @@ def _alert_response(
         card=_card_response(alert.card),
         match_count=alert.match_count,
         pending_count=alert.pending_count,
-        window=EvaluatedAllTimeWindow(type="all_time"),
+        window=window,
     )
 
 

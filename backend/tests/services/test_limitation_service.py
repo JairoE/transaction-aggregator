@@ -6,7 +6,11 @@ import pytest
 
 from app.errors import AppError
 from app.models import BankConnection, CardAccount, Transaction
-from app.schemas import AllTimeWindow, CreateTransactionLimitationRequest
+from app.schemas import (
+    AllTimeWindow,
+    CreateTransactionLimitationRequest,
+    RollingWindow,
+)
 from app.services.limitation_service import LimitationService
 
 
@@ -127,3 +131,50 @@ async def test_disabled_rules_do_not_produce_alerts(db_session, owner) -> None: 
     await service.create_rule(owner.id, _all_time_request(is_enabled=False))
 
     assert (await service.evaluate_active_alerts(owner.id)).alerts == []
+
+
+async def test_rolling_five_days_is_inclusive_and_uses_posted_date_first(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    for transaction_id, authorized, posted in (
+        ("rolling-boundary", date(2026, 8, 1), date(2026, 8, 18)),
+        ("rolling-too-old", date(2026, 8, 22), date(2026, 8, 17)),
+    ):
+        db_session.add(
+            Transaction(
+                plaid_transaction_id=transaction_id,
+                card_account_id=first.id,
+                authorized_date=authorized,
+                posted_date=posted,
+                merchant_name="Paze",
+                name="Paze checkout",
+                original_description="PAZE*CHECKOUT",
+                amount_cents=1000,
+                currency_code="USD",
+                pending=False,
+                search_text="paze paze checkout paze*checkout",
+            )
+        )
+    await db_session.flush()
+
+    service = LimitationService(db_session)
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            threshold=3,
+            window=RollingWindow(type="rolling", days=5),
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(
+        owner.id,
+        as_of_date=date(2026, 8, 22),
+    )
+
+    assert result.alerts[0].match_count == 3
+    assert result.alerts[0].window.type == "rolling"
+    assert result.alerts[0].window.days == 5
+    assert result.alerts[0].window.effective_start_date == date(2026, 8, 18)
+    assert result.alerts[0].window.effective_end_date == date(2026, 8, 22)

@@ -116,3 +116,37 @@ async def test_limitation_mutations_require_csrf(
     )
     assert response.status_code == 403
     assert response.json()["code"] == "CSRF_INVALID"
+
+
+async def test_create_rolling_rule_returns_effective_window(
+    authenticated_client: AsyncClient,
+    csrf_token: str,
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    await _seed_matching_card(db_session, owner)
+    created = await authenticated_client.post(
+        "/api/transaction-limitations",
+        headers={"X-CSRF-Token": csrf_token},
+        json={
+            "keyword": "Paze",
+            "threshold": 2,
+            "card_scope": "all_cards",
+            "card_ids": [],
+            "window": {"type": "rolling", "days": 5},
+            "is_enabled": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["window"] == {"type": "rolling", "days": 5}
+
+    alerts = await authenticated_client.get("/api/transaction-limit-alerts")
+    assert alerts.status_code == 200
+    assert alerts.json()["alerts"][0]["window"] == {
+        "type": "rolling",
+        "days": 5,
+        "start_date": None,
+        "end_date": None,
+        "effective_start_date": "2026-08-19",
+        "effective_end_date": "2026-08-23",
+    }
