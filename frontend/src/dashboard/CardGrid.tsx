@@ -1,5 +1,6 @@
 import { CardPanel } from './CardPanel'
 import type { CardTransactionGroup } from './api'
+import type { TransactionLimitAlertResponse } from '../limitations/api'
 
 /**
  * The raw API shape plus a client-only flag for whether *this* card's next
@@ -9,6 +10,7 @@ import type { CardTransactionGroup } from './api'
  */
 export interface DashboardCardGroup extends CardTransactionGroup {
   isLoadingMore: boolean
+  limitationAlerts: TransactionLimitAlertResponse[]
 }
 
 export interface CardGridProps {

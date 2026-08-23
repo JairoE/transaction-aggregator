@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthProvider'
 import { LoginPage } from './auth/LoginPage'
+import { TransactionLimitationsPage } from './limitations/TransactionLimitationsPage'
 import { ConnectionsPage } from './connections/ConnectionsPage'
 import { OAuthReturnPage } from './connections/OAuthReturnPage'
 import { DashboardPage } from './dashboard/DashboardPage'
@@ -56,6 +57,7 @@ function AppRoutes() {
         <Route path="/oauth-return" element={<OAuthReturnPage />} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/search-history" element={<SearchHistoryPage />} />
+        <Route path="/transaction-limitations" element={<TransactionLimitationsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

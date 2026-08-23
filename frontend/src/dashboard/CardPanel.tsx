@@ -1,6 +1,7 @@
 import { TransactionList } from './TransactionList'
 import { useSearchQuery } from './SearchContext'
 import type { DashboardCardGroup } from './CardGrid'
+import { TransactionLimitAlerts } from './TransactionLimitAlerts'
 
 const TRANSACTION_VIEWPORT_HEIGHT = 260
 
@@ -12,7 +13,14 @@ export interface CardPanelProps {
 export function CardPanel({ group, onLoadMore }: CardPanelProps) {
   const query = useSearchQuery()
   const hasQuery = query.trim().length > 0
-  const { card, transactions, match_count: matchCount, has_more: hasMore, isLoadingMore } = group
+  const {
+    card,
+    transactions,
+    match_count: matchCount,
+    has_more: hasMore,
+    isLoadingMore,
+    limitationAlerts,
+  } = group
 
   return (
     <section
@@ -28,6 +36,8 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
       <p className="card-panel__identity">
         {card.name} ··{card.mask ?? '----'}
       </p>
+
+      <TransactionLimitAlerts alerts={limitationAlerts} />
 
       {transactions.length === 0 ? (
         <p className="card-panel__empty">

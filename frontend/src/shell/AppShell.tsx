@@ -41,6 +41,11 @@ export function AppShell({ currentStep, statusPillText, actionLink, children }: 
         </div>
         <div className="app-header__status">
           <span className="status-pill">{statusPillText}</span>
+          {currentStep > 1 && (
+            <Link className="app-header__link" to="/transaction-limitations">
+              Transaction limits
+            </Link>
+          )}
           {actionLink && (
             <Link className="app-header__link" to={actionLink.to}>
               {actionLink.label}
