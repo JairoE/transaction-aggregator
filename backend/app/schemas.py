@@ -128,20 +128,94 @@ class GroupedSearchResponse(BaseModel):
     cache_as_of: datetime | None
 
 
+class AllTimeWindow(BaseModel):
+    type: Literal["all_time"]
+
+
+class CreateTransactionLimitationRequest(BaseModel):
+    keyword: str = Field(min_length=1, max_length=100)
+    threshold: int = Field(ge=1, le=10_000)
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str] = Field(default_factory=list, max_length=100)
+    window: AllTimeWindow
+    is_enabled: bool = True
+
+
+class UpdateTransactionLimitationRequest(BaseModel):
+    keyword: str | None = Field(default=None, min_length=1, max_length=100)
+    threshold: int | None = Field(default=None, ge=1, le=10_000)
+    card_scope: Literal["all_cards", "selected_cards"] | None = None
+    card_ids: list[str] | None = Field(default=None, max_length=100)
+    window: AllTimeWindow | None = None
+    is_enabled: bool | None = None
+
+
+class TransactionLimitationResponse(BaseModel):
+    id: str
+    keyword: str
+    threshold: int
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str]
+    window: AllTimeWindow
+    is_enabled: bool
+    needs_card_selection: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class TransactionLimitationListResponse(BaseModel):
+    rules: list[TransactionLimitationResponse]
+    cards: list[CardResponse]
+
+
+class EvaluatedAllTimeWindow(BaseModel):
+    type: Literal["all_time"]
+    days: None = None
+    start_date: None = None
+    end_date: None = None
+    effective_start_date: None = None
+    effective_end_date: None = None
+
+
+class TransactionLimitAlertResponse(BaseModel):
+    rule_id: str
+    keyword: str
+    threshold: int
+    card: CardResponse
+    match_count: int
+    pending_count: int
+    window: EvaluatedAllTimeWindow
+
+
+class TransactionLimitAlertListResponse(BaseModel):
+    alerts: list[TransactionLimitAlertResponse]
+    evaluated_at: datetime
+    as_of_date: date
+    cache_as_of: datetime | None
+
+
 __all__ = [
     "BankConnectionResponse",
+    "AllTimeWindow",
     "CardTransactionGroup",
     "GroupedSearchResponse",
     "TransactionMatch",
     "BankSlug",
     "CardResponse",
     "ConnectionsResponse",
+    "CreateTransactionLimitationRequest",
     "CreateLinkTokenRequest",
     "ErrorResponse",
     "ExchangePublicTokenRequest",
     "ExchangeResponse",
+    "EvaluatedAllTimeWindow",
     "LinkTokenResponse",
     "LoginRequest",
     "OwnerResponse",
     "SessionResponse",
+    "TransactionLimitationListResponse",
+    "TransactionLimitationResponse",
+    "TransactionLimitAlertListResponse",
+    "TransactionLimitAlertResponse",
+    "UpdateTransactionLimitationRequest",
 ]
