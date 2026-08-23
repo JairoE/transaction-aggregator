@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     Date,
     ForeignKey,
     Index,
@@ -84,6 +85,9 @@ class Owner(TimestampMixin, Base):
         back_populates="owner", cascade="all, delete-orphan"
     )
     connections: Mapped[list[BankConnection]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
+    transaction_limitations: Mapped[list[TransactionLimitation]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
 
@@ -194,6 +198,60 @@ class CardAccount(TimestampMixin, Base):
     transactions: Mapped[list[Transaction]] = relationship(
         back_populates="card", cascade="all, delete-orphan"
     )
+    limitation_links: Mapped[list[TransactionLimitationCard]] = relationship(
+        back_populates="card", cascade="all, delete-orphan"
+    )
+
+
+class TransactionLimitation(TimestampMixin, Base):
+    __tablename__ = "transaction_limitations"
+    __table_args__ = (
+        CheckConstraint(
+            "threshold BETWEEN 1 AND 10000", name="ck_limitation_threshold"
+        ),
+        CheckConstraint(
+            "card_scope IN ('all_cards', 'selected_cards')",
+            name="ck_limitation_card_scope",
+        ),
+        CheckConstraint(
+            "window_type = 'all_time'", name="ck_limitation_window_type"
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    keyword: Mapped[str] = mapped_column(String(100), nullable=False)
+    normalized_keyword: Mapped[str] = mapped_column(String(100), nullable=False)
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)
+    card_scope: Mapped[str] = mapped_column(String(24), nullable=False)
+    window_type: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="all_time"
+    )
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    owner: Mapped[Owner] = relationship(back_populates="transaction_limitations")
+    card_links: Mapped[list[TransactionLimitationCard]] = relationship(
+        back_populates="limitation", cascade="all, delete-orphan"
+    )
+
+
+class TransactionLimitationCard(Base):
+    __tablename__ = "transaction_limitation_cards"
+
+    limitation_id: Mapped[str] = mapped_column(
+        ForeignKey("transaction_limitations.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    card_account_id: Mapped[str] = mapped_column(
+        ForeignKey("card_accounts.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+    limitation: Mapped[TransactionLimitation] = relationship(back_populates="card_links")
+    card: Mapped[CardAccount] = relationship(back_populates="limitation_links")
 
 
 class Transaction(TimestampMixin, Base):
@@ -296,6 +354,8 @@ __all__ = [
     "SyncJob",
     "SyncRun",
     "Transaction",
+    "TransactionLimitation",
+    "TransactionLimitationCard",
     "UtcDateTime",
     "WebhookReceipt",
     "new_id",
