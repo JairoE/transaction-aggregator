@@ -150,3 +150,44 @@ async def test_create_rolling_rule_returns_effective_window(
         "effective_start_date": "2026-08-19",
         "effective_end_date": "2026-08-23",
     }
+
+
+async def test_create_fixed_rule_returns_inclusive_window(
+    authenticated_client: AsyncClient,
+    csrf_token: str,
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    await _seed_matching_card(db_session, owner)
+    created = await authenticated_client.post(
+        "/api/transaction-limitations",
+        headers={"X-CSRF-Token": csrf_token},
+        json={
+            "keyword": "Paze",
+            "threshold": 2,
+            "card_scope": "all_cards",
+            "card_ids": [],
+            "window": {
+                "type": "fixed",
+                "start_date": "2026-08-20",
+                "end_date": "2026-08-21",
+            },
+            "is_enabled": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["window"] == {
+        "type": "fixed",
+        "start_date": "2026-08-20",
+        "end_date": "2026-08-21",
+    }
+
+    alerts = await authenticated_client.get("/api/transaction-limit-alerts")
+    assert alerts.json()["alerts"][0]["window"] == {
+        "type": "fixed",
+        "days": None,
+        "start_date": "2026-08-20",
+        "end_date": "2026-08-21",
+        "effective_start_date": "2026-08-20",
+        "effective_end_date": "2026-08-21",
+    }

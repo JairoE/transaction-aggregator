@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 BankSlug = Literal["capital-one", "chase", "citi", "wells-fargo"]
 
@@ -137,8 +137,20 @@ class RollingWindow(BaseModel):
     days: int = Field(ge=1, le=730)
 
 
+class FixedWindow(BaseModel):
+    type: Literal["fixed"]
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def dates_are_ordered(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        return self
+
+
 TransactionWindow = Annotated[
-    AllTimeWindow | RollingWindow,
+    AllTimeWindow | RollingWindow | FixedWindow,
     Field(discriminator="type"),
 ]
 
@@ -197,8 +209,17 @@ class EvaluatedRollingWindow(BaseModel):
     effective_end_date: date
 
 
+class EvaluatedFixedWindow(BaseModel):
+    type: Literal["fixed"]
+    days: None = None
+    start_date: date
+    end_date: date
+    effective_start_date: date
+    effective_end_date: date
+
+
 EvaluatedTransactionWindow = Annotated[
-    EvaluatedAllTimeWindow | EvaluatedRollingWindow,
+    EvaluatedAllTimeWindow | EvaluatedRollingWindow | EvaluatedFixedWindow,
     Field(discriminator="type"),
 ]
 
@@ -235,10 +256,12 @@ __all__ = [
     "ExchangePublicTokenRequest",
     "ExchangeResponse",
     "EvaluatedAllTimeWindow",
+    "EvaluatedFixedWindow",
     "EvaluatedRollingWindow",
     "LinkTokenResponse",
     "LoginRequest",
     "RollingWindow",
+    "FixedWindow",
     "OwnerResponse",
     "SessionResponse",
     "TransactionLimitationListResponse",

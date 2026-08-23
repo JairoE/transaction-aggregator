@@ -10,7 +10,9 @@ from app.schemas import (
     CardResponse,
     CreateTransactionLimitationRequest,
     EvaluatedAllTimeWindow,
+    EvaluatedFixedWindow,
     EvaluatedRollingWindow,
+    FixedWindow,
     RollingWindow,
     TransactionLimitationListResponse,
     TransactionLimitationResponse,
@@ -51,11 +53,20 @@ def _card_response(card: CardRow) -> CardResponse:
 
 def _rule_response(result: RuleResult) -> TransactionLimitationResponse:
     rule = result.rule
-    window = (
-        RollingWindow(type="rolling", days=rule.rolling_days)
-        if rule.window_type == "rolling" and rule.rolling_days is not None
-        else AllTimeWindow(type="all_time")
-    )
+    if rule.window_type == "rolling" and rule.rolling_days is not None:
+        window = RollingWindow(type="rolling", days=rule.rolling_days)
+    elif (
+        rule.window_type == "fixed"
+        and rule.start_date is not None
+        and rule.end_date is not None
+    ):
+        window = FixedWindow(
+            type="fixed",
+            start_date=rule.start_date,
+            end_date=rule.end_date,
+        )
+    else:
+        window = AllTimeWindow(type="all_time")
     return TransactionLimitationResponse(
         id=rule.id,
         keyword=rule.keyword,
@@ -73,19 +84,34 @@ def _rule_response(result: RuleResult) -> TransactionLimitationResponse:
 def _alert_response(
     alert: ActiveTransactionLimitAlert,
 ) -> TransactionLimitAlertResponse:
-    window = (
-        EvaluatedRollingWindow(
+    if (
+        alert.window.type == "rolling"
+        and alert.window.days is not None
+        and alert.window.effective_start_date is not None
+        and alert.window.effective_end_date is not None
+    ):
+        window = EvaluatedRollingWindow(
             type="rolling",
             days=alert.window.days,
             effective_start_date=alert.window.effective_start_date,
             effective_end_date=alert.window.effective_end_date,
         )
-        if alert.window.type == "rolling"
-        and alert.window.days is not None
+    elif (
+        alert.window.type == "fixed"
+        and alert.window.start_date is not None
+        and alert.window.end_date is not None
         and alert.window.effective_start_date is not None
         and alert.window.effective_end_date is not None
-        else EvaluatedAllTimeWindow(type="all_time")
-    )
+    ):
+        window = EvaluatedFixedWindow(
+            type="fixed",
+            start_date=alert.window.start_date,
+            end_date=alert.window.end_date,
+            effective_start_date=alert.window.effective_start_date,
+            effective_end_date=alert.window.effective_end_date,
+        )
+    else:
+        window = EvaluatedAllTimeWindow(type="all_time")
     return TransactionLimitAlertResponse(
         rule_id=alert.rule_id,
         keyword=alert.keyword,

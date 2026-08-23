@@ -162,3 +162,56 @@ def test_rolling_downgrade_refuses_data_loss(tmp_path) -> None:  # type: ignore[
 
     with pytest.raises(RuntimeError, match="Convert or delete rolling"):
         command.downgrade(config, "0003")
+
+
+def test_fixed_window_schema_requires_ordered_dates(
+    migrated_sqlite_path: str,
+    seeded_card: dict[str, str],
+) -> None:
+    connection = sqlite3.connect(migrated_sqlite_path)
+    try:
+        connection.execute(
+            "INSERT INTO transaction_limitations "
+            "(id, owner_id, keyword, normalized_keyword, threshold, card_scope, "
+            "window_type, rolling_days, start_date, end_date, is_enabled, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("fixed-1", "owner-1", "Paze", "paze", 5, "all_cards", "fixed", None, "2026-08-20", "2026-08-20", 1, NOW, NOW),
+        )
+        for start_date, end_date in ((None, "2026-08-22"), ("2026-08-22", None), ("2026-08-23", "2026-08-22")):
+            with pytest.raises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO transaction_limitations "
+                    "(id, owner_id, keyword, normalized_keyword, threshold, card_scope, "
+                    "window_type, rolling_days, start_date, end_date, is_enabled, created_at, updated_at) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (f"invalid-{start_date}-{end_date}", "owner-1", "Paze", "paze", 5, "all_cards", "fixed", None, start_date, end_date, 1, NOW, NOW),
+                )
+                connection.rollback()
+    finally:
+        connection.close()
+
+
+def test_fixed_downgrade_refuses_data_loss(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    path = tmp_path / "fixed-downgrade.db"
+    config = alembic_config(f"sqlite+pysqlite:///{path}")
+    command.upgrade(config, "0005")
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "INSERT INTO owners (id, email, password_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("owner-1", "owner@example.com", "hash", NOW, NOW),
+        )
+        connection.execute(
+            "INSERT INTO transaction_limitations "
+            "(id, owner_id, keyword, normalized_keyword, threshold, card_scope, "
+            "window_type, start_date, end_date, is_enabled, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("fixed-1", "owner-1", "Paze", "paze", 5, "all_cards", "fixed", "2026-08-20", "2026-08-22", 1, NOW, NOW),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    with pytest.raises(RuntimeError, match="Convert or delete fixed"):
+        command.downgrade(config, "0004")

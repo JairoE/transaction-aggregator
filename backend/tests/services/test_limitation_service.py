@@ -9,6 +9,7 @@ from app.models import BankConnection, CardAccount, Transaction
 from app.schemas import (
     AllTimeWindow,
     CreateTransactionLimitationRequest,
+    FixedWindow,
     RollingWindow,
 )
 from app.services.limitation_service import LimitationService
@@ -178,3 +179,46 @@ async def test_rolling_five_days_is_inclusive_and_uses_posted_date_first(
     assert result.alerts[0].window.days == 5
     assert result.alerts[0].window.effective_start_date == date(2026, 8, 18)
     assert result.alerts[0].window.effective_end_date == date(2026, 8, 22)
+
+
+async def test_fixed_window_includes_boundaries_and_uses_posted_date_first(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    db_session.add(
+        Transaction(
+            plaid_transaction_id="fixed-posted-outside",
+            card_account_id=first.id,
+            authorized_date=date(2026, 8, 20),
+            posted_date=date(2026, 8, 19),
+            merchant_name="Paze",
+            name="Paze checkout",
+            original_description="PAZE*CHECKOUT",
+            amount_cents=1000,
+            currency_code="USD",
+            pending=False,
+            search_text="paze paze checkout paze*checkout",
+        )
+    )
+    await db_session.flush()
+
+    service = LimitationService(db_session)
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            threshold=2,
+            window=FixedWindow(
+                type="fixed",
+                start_date=date(2026, 8, 20),
+                end_date=date(2026, 8, 21),
+            ),
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(owner.id)
+
+    assert result.alerts[0].match_count == 2
+    assert result.alerts[0].window.type == "fixed"
+    assert result.alerts[0].window.effective_start_date == date(2026, 8, 20)
+    assert result.alerts[0].window.effective_end_date == date(2026, 8, 21)

@@ -114,6 +114,12 @@ class LimitationService:
             rolling_days=(
                 payload.window.days if payload.window.type == "rolling" else None
             ),
+            start_date=(
+                payload.window.start_date if payload.window.type == "fixed" else None
+            ),
+            end_date=(
+                payload.window.end_date if payload.window.type == "fixed" else None
+            ),
             is_enabled=payload.is_enabled,
         )
         rule.card_links = [
@@ -149,6 +155,12 @@ class LimitationService:
             rule.window_type = payload.window.type
             rule.rolling_days = (
                 payload.window.days if payload.window.type == "rolling" else None
+            )
+            rule.start_date = (
+                payload.window.start_date if payload.window.type == "fixed" else None
+            )
+            rule.end_date = (
+                payload.window.end_date if payload.window.type == "fixed" else None
             )
         if payload.is_enabled is not None:
             rule.is_enabled = payload.is_enabled
@@ -220,6 +232,21 @@ class LimitationService:
                     days=rule.rolling_days,
                     effective_start_date=start_date,
                     effective_end_date=today,
+                )
+            elif rule.window_type == "fixed":
+                assert rule.start_date is not None
+                assert rule.end_date is not None
+                effective_date = func.coalesce(
+                    Transaction.posted_date,
+                    Transaction.authorized_date,
+                )
+                date_filter = effective_date.between(rule.start_date, rule.end_date)
+                evaluated_window = EvaluatedWindow(
+                    type="fixed",
+                    start_date=rule.start_date,
+                    end_date=rule.end_date,
+                    effective_start_date=rule.start_date,
+                    effective_end_date=rule.end_date,
                 )
             statement = (
                 select(
