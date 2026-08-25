@@ -53,8 +53,8 @@ async def test_limitation_evaluation_p95_stays_under_half_a_second(
     for start in range(0, TRANSACTION_COUNT, 5_000):
         rows = []
         for index in range(start, min(start + 5_000, TRANSACTION_COUNT)):
-            matches_rule = index % 100 < len(cards)
-            merchant = "Scale Merchant" if matches_rule else "Everyday Purchase"
+            keyword_index = (index // len(cards)) % RULE_COUNT
+            merchant = f"Scale Merchant {keyword_index:03d}"
             rows.append({
                 "id": f"performance-transaction-{index}",
                 "plaid_transaction_id": f"performance-plaid-{index}",
@@ -88,7 +88,7 @@ async def test_limitation_evaluation_p95_stays_under_half_a_second(
         await service.create_rule(
             owner.id,
             CreateTransactionLimitationRequest(
-                keyword="Scale Merchant",
+                keyword=f"Scale Merchant {index:03d}",
                 threshold=1,
                 card_scope="all_cards",
                 card_ids=[],

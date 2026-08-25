@@ -104,6 +104,37 @@ async def test_all_time_alerts_are_per_card_and_include_pending(
     assert second.id not in {alert.card.id for alert in result.alerts}
 
 
+async def test_multiple_overlapping_and_short_keywords_are_counted_independently(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, second = await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+    await service.create_rule(owner.id, _all_time_request(keyword="Paze"))
+    await service.create_rule(
+        owner.id,
+        _all_time_request(keyword="Paze checkout", threshold=1),
+    )
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            keyword="Pa",
+            card_scope="selected_cards",
+            card_ids=[first.id],
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(owner.id)
+    alerts = {(alert.keyword, alert.card.id): alert.match_count for alert in result.alerts}
+
+    assert alerts == {
+        ("Paze", first.id): 2,
+        ("Paze checkout", first.id): 2,
+        ("Paze checkout", second.id): 1,
+        ("Pa", first.id): 2,
+    }
+
+
 async def test_selected_card_rules_reject_missing_or_unowned_cards(
     db_session,
     owner,

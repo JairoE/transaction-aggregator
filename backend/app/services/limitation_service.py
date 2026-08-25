@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from os.path import commonprefix
 
-from sqlalchemy import case, func, select
+from sqlalchemy import func, literal_column, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.errors import AppError
 from app.models import (
@@ -25,8 +27,8 @@ from app.schemas import (
 from app.services.plaid_gateway import SUPPORTED_BANKS
 from app.services.search_service import (
     CardRow,
+    NormalizedQuery,
     normalize_query,
-    transaction_match_filter,
 )
 
 BANK_ORDER = {slug: index for index, slug in enumerate(SUPPORTED_BANKS)}
@@ -71,6 +73,16 @@ class AlertResult:
     evaluated_at: datetime
     as_of_date: date
     cache_as_of: datetime | None
+
+
+@dataclass(frozen=True)
+class PreparedRule:
+    rule: TransactionLimitation
+    target_ids: frozenset[str]
+    normalized: NormalizedQuery
+    window: EvaluatedWindow
+    start_date: date | None
+    end_date: date | None
 
 
 class LimitationService:
@@ -201,11 +213,7 @@ class LimitationService:
             )
         ).scalars().all()
 
-        alerts: list[ActiveTransactionLimitAlert] = []
-        evaluation_cache: dict[
-            tuple[str, tuple[str, ...], str, int | None, date | None, date | None],
-            list[tuple[str, int, int]],
-        ] = {}
+        prepared_rules: list[PreparedRule] = []
         for rule in rules:
             target_ids = (
                 active_card_ids
@@ -219,19 +227,13 @@ class LimitationService:
             if not target_ids:
                 continue
             normalized = normalize_query(rule.keyword)
-            pending_count = func.sum(
-                case((Transaction.pending.is_(True), 1), else_=0)
-            )
-            date_filter = None
+            start_date = None
+            end_date = None
             evaluated_window = EvaluatedWindow(type="all_time")
             if rule.window_type == "rolling":
                 assert rule.rolling_days is not None
                 start_date = today - timedelta(days=rule.rolling_days - 1)
-                effective_date = func.coalesce(
-                    Transaction.posted_date,
-                    Transaction.authorized_date,
-                )
-                date_filter = effective_date.between(start_date, today)
+                end_date = today
                 evaluated_window = EvaluatedWindow(
                     type="rolling",
                     days=rule.rolling_days,
@@ -241,11 +243,8 @@ class LimitationService:
             elif rule.window_type == "fixed":
                 assert rule.start_date is not None
                 assert rule.end_date is not None
-                effective_date = func.coalesce(
-                    Transaction.posted_date,
-                    Transaction.authorized_date,
-                )
-                date_filter = effective_date.between(rule.start_date, rule.end_date)
+                start_date = rule.start_date
+                end_date = rule.end_date
                 evaluated_window = EvaluatedWindow(
                     type="fixed",
                     start_date=rule.start_date,
@@ -253,49 +252,89 @@ class LimitationService:
                     effective_start_date=rule.start_date,
                     effective_end_date=rule.end_date,
                 )
-            cache_key = (
-                normalized.normalized,
-                tuple(sorted(target_ids)),
-                rule.window_type,
-                rule.rolling_days,
-                rule.start_date,
-                rule.end_date,
-            )
-            rows = evaluation_cache.get(cache_key)
-            if rows is None:
-                statement = (
-                    select(
-                        Transaction.card_account_id,
-                        func.count(Transaction.id),
-                        pending_count,
-                    )
-                    .where(Transaction.card_account_id.in_(target_ids))
-                    .where(transaction_match_filter(normalized))
+            prepared_rules.append(
+                PreparedRule(
+                    rule=rule,
+                    target_ids=frozenset(target_ids),
+                    normalized=normalized,
+                    window=evaluated_window,
+                    start_date=start_date,
+                    end_date=end_date,
                 )
-                if date_filter is not None:
-                    statement = statement.where(date_filter)
-                raw_rows = (
-                    await self._session.execute(
-                        statement.group_by(Transaction.card_account_id)
+            )
+
+        counts: dict[tuple[str, str], tuple[int, int]] = {}
+        effective_date = func.coalesce(
+            Transaction.posted_date,
+            Transaction.authorized_date,
+        )
+        if prepared_rules:
+            target_ids = set().union(*(rule.target_ids for rule in prepared_rules))
+            normalized_queries = list({
+                rule.normalized.normalized: rule.normalized
+                for rule in prepared_rules
+            }.values())
+            statement = (
+                select(
+                    Transaction.card_account_id,
+                    Transaction.pending,
+                    Transaction.search_text,
+                    effective_date,
+                )
+                .where(Transaction.card_account_id.in_(target_ids))
+                .where(_batched_match_filter(normalized_queries))
+            )
+            rows = (await self._session.execute(statement)).all()
+            matching_rules_cache: dict[
+                tuple[str, str, date | None], list[PreparedRule]
+            ] = {}
+            for card_id, is_pending, search_text, transaction_date in rows:
+                cache_key = (card_id, search_text, transaction_date)
+                matching_rules = matching_rules_cache.get(cache_key)
+                if matching_rules is None:
+                    matching_rules = [
+                        prepared
+                        for prepared in prepared_rules
+                        if card_id in prepared.target_ids
+                        and prepared.normalized.normalized in search_text
+                        and (
+                            prepared.start_date is None
+                            or prepared.end_date is None
+                            or (
+                                transaction_date is not None
+                                and prepared.start_date
+                                <= transaction_date
+                                <= prepared.end_date
+                            )
+                        )
+                    ]
+                    matching_rules_cache[cache_key] = matching_rules
+                for prepared in matching_rules:
+                    count_key = (prepared.rule.id, card_id)
+                    match_count, pending_count = counts.get(count_key, (0, 0))
+                    counts[count_key] = (
+                        match_count + 1,
+                        pending_count + 1 if is_pending else pending_count,
                     )
-                ).all()
-                rows = [
-                    (card_id, int(match_count), int(pending or 0))
-                    for card_id, match_count, pending in raw_rows
-                ]
-                evaluation_cache[cache_key] = rows
-            for card_id, match_count, pending in rows:
-                if match_count < rule.threshold:
+
+        alerts: list[ActiveTransactionLimitAlert] = []
+        for prepared in prepared_rules:
+            for card_id in prepared.target_ids:
+                match_count, pending_count = counts.get(
+                    (prepared.rule.id, card_id),
+                    (0, 0),
+                )
+                if match_count < prepared.rule.threshold:
                     continue
                 alerts.append(
                     ActiveTransactionLimitAlert(
-                        rule_id=rule.id,
-                        keyword=rule.keyword,
-                        threshold=rule.threshold,
+                        rule_id=prepared.rule.id,
+                        keyword=prepared.rule.keyword,
+                        threshold=prepared.rule.threshold,
                         card=cards_by_id[card_id],
                         match_count=match_count,
-                        pending_count=pending,
-                        window=evaluated_window,
+                        pending_count=pending_count,
+                        window=prepared.window,
                     )
                 )
 
@@ -408,6 +447,38 @@ def _normalize_keyword(keyword: str) -> tuple[str, str]:
 
 def _deduplicate(card_ids: list[str]) -> list[str]:
     return list(dict.fromkeys(card_ids))
+
+
+def _batched_match_filter(
+    normalized_queries: list[NormalizedQuery],
+) -> ColumnElement[bool]:
+    filters: list[ColumnElement[bool]] = []
+    indexed_queries = [query for query in normalized_queries if query.uses_index]
+    if indexed_queries:
+        shared_prefix = commonprefix(
+            [query.normalized for query in indexed_queries]
+        ).strip()
+        if len(shared_prefix) >= 3:
+            shared_query = normalize_query(shared_prefix)
+            assert shared_query.fts_expression is not None
+            fts_expression = shared_query.fts_expression
+        else:
+            fts_expression = " OR ".join(
+                query.fts_expression or "" for query in indexed_queries
+            )
+        matching_rowids = (
+            select(literal_column("rowid"))
+            .select_from(text("transactions_fts"))
+            .where(text("transactions_fts MATCH :limitation_fts_query"))
+            .params(limitation_fts_query=fts_expression)
+        )
+        filters.append(literal_column("transactions.rowid").in_(matching_rowids))
+    filters.extend(
+        Transaction.search_text.like(query.like_pattern or "", escape="\\")
+        for query in normalized_queries
+        if not query.uses_index
+    )
+    return or_(*filters)
 
 
 __all__ = [
