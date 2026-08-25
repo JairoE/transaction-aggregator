@@ -12,12 +12,13 @@ import {
   type TransactionLimitationResponse,
 } from './api'
 import { TransactionLimitationForm } from './TransactionLimitationForm'
-import { TransactionLimitationList } from './TransactionLimitationList'
+import { TransactionLimitationList, type BusyRuleAction } from './TransactionLimitationList'
 
 export function TransactionLimitationsPage() {
   const queryClient = useQueryClient()
   const [editing, setEditing] = useState<TransactionLimitationResponse | null>(null)
-  const [busyRuleId, setBusyRuleId] = useState<string | null>(null)
+  const [busyAction, setBusyAction] = useState<BusyRuleAction>(null)
+  const [operationError, setOperationError] = useState<string | null>(null)
   const query = useQuery({
     queryKey: TRANSACTION_LIMITATIONS_QUERY_KEY,
     queryFn: fetchTransactionLimitations,
@@ -40,15 +41,21 @@ export function TransactionLimitationsPage() {
     },
   })
   const updateMutation = useMutation({
-    mutationFn: ({ id, is_enabled }: { id: string; is_enabled: boolean }) =>
-      updateTransactionLimitation(id, { is_enabled }),
+    mutationFn: (rule: TransactionLimitationResponse) =>
+      updateTransactionLimitation(rule.id, { is_enabled: !rule.is_enabled }),
     onSuccess: invalidate,
-    onSettled: () => setBusyRuleId(null),
+    onError: (_error, rule) => {
+      setOperationError(`We could not ${rule.is_enabled ? 'disable' : 'enable'} “${rule.keyword}”. Try again.`)
+    },
+    onSettled: () => setBusyAction(null),
   })
   const deleteMutation = useMutation({
-    mutationFn: deleteTransactionLimitation,
+    mutationFn: (rule: TransactionLimitationResponse) => deleteTransactionLimitation(rule.id),
     onSuccess: invalidate,
-    onSettled: () => setBusyRuleId(null),
+    onError: (_error, rule) => {
+      setOperationError(`We could not delete “${rule.keyword}”. Try again.`)
+    },
+    onSettled: () => setBusyAction(null),
   })
 
   return (
@@ -69,18 +76,21 @@ export function TransactionLimitationsPage() {
               onCancel={editing ? () => setEditing(null) : undefined}
             />
             {saveMutation.isError && <p className="form-error" role="alert">We could not save that rule. Check the fields and try again.</p>}
+            {operationError && <p className="form-error" role="alert">{operationError}</p>}
             <TransactionLimitationList
               rules={query.data.rules}
-              busyRuleId={busyRuleId}
+              busyAction={busyAction}
               onEdit={setEditing}
               onToggle={(rule) => {
-                setBusyRuleId(rule.id)
-                updateMutation.mutate({ id: rule.id, is_enabled: !rule.is_enabled })
+                setOperationError(null)
+                setBusyAction({ ruleId: rule.id, action: rule.is_enabled ? 'disable' : 'enable' })
+                updateMutation.mutate(rule)
               }}
               onDelete={(rule) => {
                 if (window.confirm(`Delete the transaction limitation for “${rule.keyword}”?`)) {
-                  setBusyRuleId(rule.id)
-                  deleteMutation.mutate(rule.id)
+                  setOperationError(null)
+                  setBusyAction({ ruleId: rule.id, action: 'delete' })
+                  deleteMutation.mutate(rule)
                 }
               }}
             />

@@ -1,5 +1,5 @@
-import { HttpResponse, http } from 'msw'
-import { describe, expect, it } from 'vitest'
+import { HttpResponse, delay, http } from 'msw'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { server } from '../test/server'
@@ -31,6 +31,8 @@ const createdRule = {
   created_at: '2026-08-22T12:00:00Z',
   updated_at: '2026-08-22T12:00:00Z',
 }
+
+afterEach(() => vi.restoreAllMocks())
 
 describe('transaction limitations page', () => {
   it('creates an informational all-time rule for every card', async () => {
@@ -100,6 +102,49 @@ describe('transaction limitations page', () => {
     renderAppAt('/transaction-limitations')
 
     expect(await screen.findByText(/needs card selection/i)).toBeInTheDocument()
+  })
+
+  it('shows pending and failure states when disabling a rule', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({
+        rules: [createdRule],
+        cards: [card],
+      })),
+      http.patch('/api/transaction-limitations/:ruleId', async () => {
+        await delay(100)
+        return HttpResponse.json({ code: 'INTERNAL_ERROR', message: 'Unavailable' }, { status: 500 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/transaction-limitations')
+
+    await user.click(await screen.findByRole('button', { name: 'Disable' }))
+
+    expect(screen.getByRole('button', { name: 'Disabling…' })).toBeDisabled()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not disable “Paze”/i)
+  })
+
+  it('shows pending and failure states when deleting a rule', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({
+        rules: [createdRule],
+        cards: [card],
+      })),
+      http.delete('/api/transaction-limitations/:ruleId', async () => {
+        await delay(100)
+        return HttpResponse.json({ code: 'INTERNAL_ERROR', message: 'Unavailable' }, { status: 500 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/transaction-limitations')
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }))
+
+    expect(screen.getByRole('button', { name: 'Deleting…' })).toBeDisabled()
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not delete “Paze”/i)
   })
 
   it('creates a rolling rule with a validated number of days', async () => {
