@@ -32,6 +32,11 @@ export function TransactionLimitationList({ rules, busyRuleId, onEdit, onToggle,
               <h3>{rule.keyword}</h3>
               <p>{rule.threshold} transactions · {windowSummary(rule)}</p>
               <p>{rule.card_scope === 'all_cards' ? 'Every card independently' : `${rule.card_ids.length} selected cards`}</p>
+              {rule.needs_card_selection && (
+                <p className="limitation-rule__warning" role="status">
+                  Needs card selection. Edit this rule to choose an active card.
+                </p>
+              )}
               <span className="status-chip">{rule.is_enabled ? 'Enabled' : 'Disabled'}</span>
             </div>
             <div className="limitation-rule__actions">

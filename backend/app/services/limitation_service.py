@@ -143,7 +143,8 @@ class LimitationService:
             else [link.card_account_id for link in rule.card_links]
         )
         card_scope = payload.card_scope or rule.card_scope
-        await self._validate_cards(owner_id, card_scope, card_ids)
+        if payload.card_scope is not None or payload.card_ids is not None:
+            await self._validate_cards(owner_id, card_scope, card_ids)
 
         if payload.keyword is not None:
             rule.keyword, rule.normalized_keyword = _normalize_keyword(payload.keyword)

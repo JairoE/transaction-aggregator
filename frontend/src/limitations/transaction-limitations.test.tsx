@@ -83,6 +83,25 @@ describe('transaction limitations page', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/select at least one card/i)
   })
 
+  it('marks a selected-card rule whose cards were disconnected', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({
+        rules: [{
+          ...createdRule,
+          card_scope: 'selected_cards',
+          card_ids: [],
+          needs_card_selection: true,
+        }],
+        cards: [card],
+      })),
+    )
+
+    renderAppAt('/transaction-limitations')
+
+    expect(await screen.findByText(/needs card selection/i)).toBeInTheDocument()
+  })
+
   it('creates a rolling rule with a validated number of days', async () => {
     let body: unknown
     const rollingRule = {

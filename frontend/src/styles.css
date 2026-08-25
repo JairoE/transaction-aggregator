@@ -605,6 +605,15 @@ input:focus-visible {
   gap: 1rem;
 }
 
+.limitation-rule__warning {
+  margin: 0.75rem 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: var(--radius);
+  background: #fff7e8;
+  color: #6b450b;
+  font-size: 0.85rem;
+}
+
 @media (max-width: 768px) {
   .limitation-list__grid {
     grid-template-columns: 1fr;

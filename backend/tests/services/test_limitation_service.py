@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from sqlalchemy import delete
 
 from app.errors import AppError
 from app.models import BankConnection, CardAccount, Transaction
@@ -11,6 +12,7 @@ from app.schemas import (
     CreateTransactionLimitationRequest,
     FixedWindow,
     RollingWindow,
+    UpdateTransactionLimitationRequest,
 )
 from app.services.limitation_service import LimitationService
 
@@ -124,6 +126,34 @@ async def test_selected_card_rules_reject_missing_or_unowned_cards(
             ),
         )
     assert unavailable.value.code == "REQUEST_INVALID"
+
+
+async def test_orphaned_selected_card_rule_can_still_be_disabled(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    owner_id = owner.id
+    service = LimitationService(db_session)
+    created = await service.create_rule(
+        owner_id,
+        _all_time_request(card_scope="selected_cards", card_ids=[first.id]),
+    )
+    rule_id = created.rule.id
+    await db_session.commit()
+
+    await db_session.execute(delete(CardAccount).where(CardAccount.id == first.id))
+    await db_session.commit()
+    db_session.expire_all()
+
+    updated = await service.update_rule(
+        owner_id,
+        rule_id,
+        UpdateTransactionLimitationRequest(is_enabled=False),
+    )
+
+    assert updated.rule.is_enabled is False
+    assert updated.card_ids == []
 
 
 async def test_disabled_rules_do_not_produce_alerts(db_session, owner) -> None:  # type: ignore[no-untyped-def]
