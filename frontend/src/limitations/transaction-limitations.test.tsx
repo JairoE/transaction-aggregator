@@ -82,7 +82,28 @@ describe('transaction limitations page', () => {
     await user.click(screen.getByRole('radio', { name: /selected cards/i }))
     await user.click(screen.getByRole('button', { name: /save rule/i }))
 
-    expect(screen.getByRole('alert')).toHaveTextContent(/select at least one card/i)
+    const alert = screen.getByRole('alert')
+    const cardsGroup = screen.getByRole('group', { name: 'Cards' })
+    expect(alert).toHaveTextContent(/select at least one card/i)
+    expect(cardsGroup).toHaveAttribute('aria-invalid', 'true')
+    expect(cardsGroup).toHaveAttribute('aria-describedby', alert.id)
+  })
+
+  it('associates a missing-keyword error with the keyword field', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({ rules: [], cards: [card] })),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/transaction-limitations')
+
+    await screen.findByLabelText(/keyword or phrase/i)
+    await user.click(screen.getByRole('button', { name: /save rule/i }))
+
+    const alert = screen.getByRole('alert')
+    const keyword = screen.getByLabelText(/keyword or phrase/i)
+    expect(keyword).toHaveAttribute('aria-invalid', 'true')
+    expect(keyword).toHaveAttribute('aria-describedby', alert.id)
   })
 
   it('marks a selected-card rule whose cards were disconnected', async () => {
@@ -206,7 +227,12 @@ describe('transaction limitations page', () => {
     await user.type(screen.getByLabelText(/start date/i), '2026-07-31')
     await user.type(screen.getByLabelText(/end date/i), '2026-07-01')
     await user.click(screen.getByRole('button', { name: /save rule/i }))
-    expect(screen.getByRole('alert')).toHaveTextContent(/end date must be on or after/i)
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(/end date must be on or after/i)
+    expect(screen.getByLabelText(/start date/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/start date/i)).toHaveAttribute('aria-describedby', alert.id)
+    expect(screen.getByLabelText(/end date/i)).toHaveAttribute('aria-invalid', 'true')
+    expect(screen.getByLabelText(/end date/i)).toHaveAttribute('aria-describedby', alert.id)
 
     await user.clear(screen.getByLabelText(/start date/i))
     await user.type(screen.getByLabelText(/start date/i), '2026-07-01')

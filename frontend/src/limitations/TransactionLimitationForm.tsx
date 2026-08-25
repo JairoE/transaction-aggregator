@@ -13,6 +13,15 @@ interface Props {
   onCancel?: () => void
 }
 
+type ValidationField = 'keyword' | 'threshold' | 'cards' | 'rolling-days' | 'fixed-dates'
+
+interface ValidationError {
+  field: ValidationField
+  message: string
+}
+
+const VALIDATION_ERROR_ID = 'limitation-form-error'
+
 export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, onCancel }: Props) {
   const [keyword, setKeyword] = useState(initialRule?.keyword ?? '')
   const [threshold, setThreshold] = useState(String(initialRule?.threshold ?? 1))
@@ -30,7 +39,7 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
   const [endDate, setEndDate] = useState(
     initialRule?.window.type === 'fixed' ? initialRule.window.end_date : '',
   )
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState<ValidationError | null>(null)
 
   useEffect(() => {
     setKeyword(initialRule?.keyword ?? '')
@@ -48,15 +57,15 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
     event.preventDefault()
     const parsedThreshold = Number(threshold)
     if (!keyword.trim()) {
-      setError('Enter a keyword or phrase.')
+      setError({ field: 'keyword', message: 'Enter a keyword or phrase.' })
       return
     }
     if (!Number.isInteger(parsedThreshold) || parsedThreshold < 1 || parsedThreshold > 10_000) {
-      setError('Enter a transaction threshold from 1 through 10,000.')
+      setError({ field: 'threshold', message: 'Enter a transaction threshold from 1 through 10,000.' })
       return
     }
     if (scope === 'selected_cards' && cardIds.length === 0) {
-      setError('Select at least one card.')
+      setError({ field: 'cards', message: 'Select at least one card.' })
       return
     }
     const parsedRollingDays = Number(rollingDays)
@@ -64,15 +73,15 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
       windowType === 'rolling'
       && (!Number.isInteger(parsedRollingDays) || parsedRollingDays < 1 || parsedRollingDays > 730)
     ) {
-      setError('Enter a rolling window from 1 through 730 days.')
+      setError({ field: 'rolling-days', message: 'Enter a rolling window from 1 through 730 days.' })
       return
     }
     if (windowType === 'fixed' && (!startDate || !endDate)) {
-      setError('Enter both a start date and an end date.')
+      setError({ field: 'fixed-dates', message: 'Enter both a start date and an end date.' })
       return
     }
     if (windowType === 'fixed' && startDate > endDate) {
-      setError('End date must be on or after the start date.')
+      setError({ field: 'fixed-dates', message: 'End date must be on or after the start date.' })
       return
     }
     setError(null)
@@ -93,11 +102,13 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
   return (
     <form className="limitation-form" onSubmit={submit} noValidate>
       <h2>{initialRule ? 'Edit rule' : 'Create a rule'}</h2>
-      {error && <p className="form-error" role="alert">{error}</p>}
+      {error && <p className="form-error" id={VALIDATION_ERROR_ID} role="alert">{error.message}</p>}
       <div className="form-field">
         <label htmlFor="limitation-keyword">Keyword or phrase</label>
         <input
           id="limitation-keyword"
+          aria-describedby={error?.field === 'keyword' ? VALIDATION_ERROR_ID : undefined}
+          aria-invalid={error?.field === 'keyword' || undefined}
           maxLength={100}
           value={keyword}
           onChange={(event) => setKeyword(event.target.value)}
@@ -107,6 +118,8 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
         <label htmlFor="limitation-threshold">Transaction threshold</label>
         <input
           id="limitation-threshold"
+          aria-describedby={error?.field === 'threshold' ? VALIDATION_ERROR_ID : undefined}
+          aria-invalid={error?.field === 'threshold' || undefined}
           type="number"
           min={1}
           max={10_000}
@@ -114,7 +127,11 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
           onChange={(event) => setThreshold(event.target.value)}
         />
       </div>
-      <fieldset className="limitation-form__fieldset">
+      <fieldset
+        className="limitation-form__fieldset"
+        aria-describedby={error?.field === 'cards' ? VALIDATION_ERROR_ID : undefined}
+        aria-invalid={error?.field === 'cards' || undefined}
+      >
         <legend>Cards</legend>
         <label>
           <input
@@ -185,6 +202,8 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
             <label htmlFor="limitation-rolling-days">Number of days</label>
             <input
               id="limitation-rolling-days"
+              aria-describedby={error?.field === 'rolling-days' ? VALIDATION_ERROR_ID : undefined}
+              aria-invalid={error?.field === 'rolling-days' || undefined}
               type="number"
               min={1}
               max={730}
@@ -200,6 +219,8 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
               <label htmlFor="limitation-start-date">Start date</label>
               <input
                 id="limitation-start-date"
+                aria-describedby={error?.field === 'fixed-dates' ? VALIDATION_ERROR_ID : undefined}
+                aria-invalid={error?.field === 'fixed-dates' || undefined}
                 type="date"
                 value={startDate}
                 onChange={(event) => setStartDate(event.target.value)}
@@ -209,6 +230,8 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
               <label htmlFor="limitation-end-date">End date</label>
               <input
                 id="limitation-end-date"
+                aria-describedby={error?.field === 'fixed-dates' ? VALIDATION_ERROR_ID : undefined}
+                aria-invalid={error?.field === 'fixed-dates' || undefined}
                 type="date"
                 value={endDate}
                 onChange={(event) => setEndDate(event.target.value)}
