@@ -1252,6 +1252,21 @@ input:focus-visible {
   font-size: 0.75rem;
 }
 
+.transaction-row__alert-link {
+  margin-left: auto;
+  color: var(--color-accent);
+  font-weight: 600;
+  text-decoration: none;
+  min-height: 2rem;
+  display: inline-flex;
+  align-items: center;
+}
+
+.transaction-row__alert-link:hover,
+.transaction-row__alert-link:focus-visible {
+  text-decoration: underline;
+}
+
 .tx-highlight {
   background: transparent;
   color: var(--color-accent);

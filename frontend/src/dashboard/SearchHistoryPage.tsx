@@ -20,7 +20,7 @@ export function SearchHistoryPage() {
 
   return (
     <AppShell
-      currentStep={4}
+      currentStep={3}
       statusPillText="7-day history"
       actionLink={{ label: 'Search transactions', to: '/dashboard' }}
     >

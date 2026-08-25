@@ -44,7 +44,7 @@ test('owner creates and disables a dashboard transaction alert', async ({ page }
   await expect(card.getByRole('alert')).toContainText('Urban Market')
   await expect(card.getByRole('alert')).toContainText('0 pending')
 
-  await page.getByRole('link', { name: /transaction limits/i }).click()
+  await page.getByRole('link', { name: /alerts & limits/i }).click()
   const rule = page.locator('.limitation-rule').filter({ hasText: 'Urban Market' }).last()
   await rule.getByRole('button', { name: 'Disable' }).click()
   await expect(rule.getByText('Disabled')).toBeVisible()

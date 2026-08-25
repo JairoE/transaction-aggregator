@@ -69,6 +69,21 @@ describe('transaction limitations page', () => {
     await runAxeSmokeTest(container)
   })
 
+  it('prefills a selected-card rule from a transaction shortcut', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({ rules: [], cards: [card] })),
+    )
+
+    renderAppAt('/transaction-limitations?keyword=Dunkin%27%20Donuts&card_id=card-1')
+
+    expect(await screen.findByLabelText(/keyword or phrase/i)).toHaveValue("Dunkin' Donuts")
+    expect(screen.getByRole('radio', { name: /selected cards/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /capital one venture ending in 4812/i })).toBeChecked()
+    const currentStep = screen.getByRole('listitem', { current: 'step' })
+    expect(currentStep).toHaveTextContent('Alerts & limits')
+  })
+
   it('requires at least one card when selected-card scope is chosen', async () => {
     server.use(
       authenticatedSessionHandler(),

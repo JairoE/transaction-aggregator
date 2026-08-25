@@ -7,7 +7,7 @@ const STEPS = [
   { step: 1, label: 'Sign in', description: 'Secure owner access', to: '/' },
   { step: 2, label: 'Connect banks', description: 'Add your card accounts', to: '/connections' },
   { step: 3, label: 'View cards', description: 'Review recent activity', to: '/dashboard' },
-  { step: 4, label: 'Search history', description: 'Review recent phrases', to: '/search-history' },
+  { step: 4, label: 'Alerts & limits', description: 'Set transaction alerts', to: '/transaction-limitations' },
 ] as const
 
 export interface AppShellActionLink {
@@ -42,8 +42,8 @@ export function AppShell({ currentStep, statusPillText, actionLink, children }: 
         <div className="app-header__status">
           <span className="status-pill">{statusPillText}</span>
           {currentStep > 1 && (
-            <Link className="app-header__link" to="/transaction-limitations">
-              Transaction limits
+            <Link className="app-header__link" to="/search-history">
+              Search history
             </Link>
           )}
           {actionLink && (
@@ -61,7 +61,7 @@ export function AppShell({ currentStep, statusPillText, actionLink, children }: 
           <div className="journey-rail__intro">
             <p className="journey-rail__eyebrow">Your workflow</p>
             <h2>Find it faster.</h2>
-            <p>Four focused steps from secure sign-in to any transaction.</p>
+            <p>Four focused steps from secure sign-in to transaction alerts.</p>
           </div>
           <ol className="journey-steps">
             {STEPS.map(({ step, label, description, to }) => {

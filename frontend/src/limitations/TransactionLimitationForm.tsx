@@ -8,6 +8,8 @@ import type {
 interface Props {
   cards: LimitationCard[]
   initialRule?: TransactionLimitationResponse | null
+  initialKeyword?: string
+  initialCardId?: string
   busy: boolean
   onSubmit: (input: CreateTransactionLimitationRequest) => void
   onCancel?: () => void
@@ -22,11 +24,23 @@ interface ValidationError {
 
 const VALIDATION_ERROR_ID = 'limitation-form-error'
 
-export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, onCancel }: Props) {
-  const [keyword, setKeyword] = useState(initialRule?.keyword ?? '')
+export function TransactionLimitationForm({
+  cards,
+  initialRule,
+  initialKeyword,
+  initialCardId,
+  busy,
+  onSubmit,
+  onCancel,
+}: Props) {
+  const [keyword, setKeyword] = useState(initialRule?.keyword ?? initialKeyword ?? '')
   const [threshold, setThreshold] = useState(String(initialRule?.threshold ?? 1))
-  const [scope, setScope] = useState<'all_cards' | 'selected_cards'>(initialRule?.card_scope ?? 'all_cards')
-  const [cardIds, setCardIds] = useState<string[]>(initialRule?.card_ids ?? [])
+  const [scope, setScope] = useState<'all_cards' | 'selected_cards'>(
+    initialRule?.card_scope ?? (initialCardId ? 'selected_cards' : 'all_cards'),
+  )
+  const [cardIds, setCardIds] = useState<string[]>(
+    initialRule?.card_ids ?? (initialCardId ? [initialCardId] : []),
+  )
   const [windowType, setWindowType] = useState<'all_time' | 'rolling' | 'fixed'>(
     initialRule?.window.type ?? 'all_time',
   )
@@ -42,16 +56,16 @@ export function TransactionLimitationForm({ cards, initialRule, busy, onSubmit, 
   const [error, setError] = useState<ValidationError | null>(null)
 
   useEffect(() => {
-    setKeyword(initialRule?.keyword ?? '')
+    setKeyword(initialRule?.keyword ?? initialKeyword ?? '')
     setThreshold(String(initialRule?.threshold ?? 1))
-    setScope(initialRule?.card_scope ?? 'all_cards')
-    setCardIds(initialRule?.card_ids ?? [])
+    setScope(initialRule?.card_scope ?? (initialCardId ? 'selected_cards' : 'all_cards'))
+    setCardIds(initialRule?.card_ids ?? (initialCardId ? [initialCardId] : []))
     setWindowType(initialRule?.window.type ?? 'all_time')
     setRollingDays(String(initialRule?.window.type === 'rolling' ? initialRule.window.days : 5))
     setStartDate(initialRule?.window.type === 'fixed' ? initialRule.window.start_date : '')
     setEndDate(initialRule?.window.type === 'fixed' ? initialRule.window.end_date : '')
     setError(null)
-  }, [initialRule])
+  }, [initialCardId, initialKeyword, initialRule])
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

@@ -46,7 +46,7 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
             : 'No cached transactions on this card yet.'}
         </p>
       ) : (
-        <TransactionList transactions={transactions} height={TRANSACTION_VIEWPORT_HEIGHT} />
+        <TransactionList cardId={card.id} transactions={transactions} height={TRANSACTION_VIEWPORT_HEIGHT} />
       )}
 
       {hasMore && (

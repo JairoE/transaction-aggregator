@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { AppShell } from '../shell/AppShell'
 import {
   TRANSACTION_LIMITATIONS_QUERY_KEY,
@@ -16,6 +17,7 @@ import { TransactionLimitationList, type BusyRuleAction } from './TransactionLim
 
 export function TransactionLimitationsPage() {
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [editing, setEditing] = useState<TransactionLimitationResponse | null>(null)
   const [busyAction, setBusyAction] = useState<BusyRuleAction>(null)
   const [operationError, setOperationError] = useState<string | null>(null)
@@ -36,6 +38,9 @@ export function TransactionLimitationsPage() {
       ? updateTransactionLimitation(editing.id, input)
       : createTransactionLimitation(input),
     onSuccess: async () => {
+      if (!editing) {
+        setSearchParams({}, { replace: true })
+      }
       setEditing(null)
       await invalidate()
     },
@@ -59,7 +64,7 @@ export function TransactionLimitationsPage() {
   })
 
   return (
-    <AppShell currentStep={3} statusPillText="Informational limits" actionLink={{ label: 'View cards', to: '/dashboard' }}>
+    <AppShell currentStep={4} statusPillText="Informational limits" actionLink={{ label: 'View cards', to: '/dashboard' }}>
       <main className="limitations-page">
         <p className="eyebrow">Transaction limitations</p>
         <h1>Set transaction-count alerts</h1>
@@ -71,6 +76,10 @@ export function TransactionLimitationsPage() {
             <TransactionLimitationForm
               cards={query.data.cards}
               initialRule={editing}
+              initialKeyword={searchParams.get('keyword') ?? undefined}
+              initialCardId={query.data.cards.some((card) => card.id === searchParams.get('card_id'))
+                ? searchParams.get('card_id') ?? undefined
+                : undefined}
               busy={saveMutation.isPending}
               onSubmit={(input) => saveMutation.mutate(input)}
               onCancel={editing ? () => setEditing(null) : undefined}
