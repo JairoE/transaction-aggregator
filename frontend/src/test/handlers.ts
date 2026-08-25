@@ -75,6 +75,12 @@ export const handlers = [
     HttpResponse.json({ code: 'AUTH_REQUIRED', message: 'Sign in to continue.' }, { status: 401 }),
   ),
   http.get('/api/connections', () => HttpResponse.json(makeConnectionsResponse())),
+  http.get('/api/transaction-limit-alerts', () => HttpResponse.json({
+    alerts: [],
+    evaluated_at: '2026-08-22T12:00:00Z',
+    as_of_date: '2026-08-22',
+    cache_as_of: null,
+  })),
 ]
 
 export function authenticatedSessionHandler() {

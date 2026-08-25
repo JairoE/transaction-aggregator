@@ -149,6 +149,22 @@ describe('dashboard card grid', () => {
     const region = regionFor(card.mask ?? '')
     expect(within(region).getByText('Pending')).toBeInTheDocument()
   })
+
+  it('offers a transaction-level shortcut that prefills an alert for its card and merchant', async () => {
+    server.use(searchHandler(() => recentSearchResponse()))
+    await renderDashboard()
+
+    const card = DASHBOARD_CARDS[0]
+    const region = regionFor(card.mask ?? '')
+    const link = within(region).getByRole('link', {
+      name: `Set alert for ${card.bank_display_name} Everyday Purchase`,
+    })
+
+    expect(link).toHaveAttribute(
+      'href',
+      `/transaction-limitations?keyword=${encodeURIComponent(`${card.bank_display_name} Everyday Purchase`)}&card_id=${encodeURIComponent(card.id)}`,
+    )
+  })
 })
 
 describe('highlightText', () => {

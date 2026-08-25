@@ -1,0 +1,285 @@
+from __future__ import annotations
+
+from datetime import date
+
+import pytest
+from sqlalchemy import delete
+
+from app.errors import AppError
+from app.models import BankConnection, CardAccount, Transaction
+from app.schemas import (
+    AllTimeWindow,
+    CreateTransactionLimitationRequest,
+    FixedWindow,
+    RollingWindow,
+    UpdateTransactionLimitationRequest,
+)
+from app.services.limitation_service import LimitationService
+
+
+async def _seed_cards(db_session, owner):  # type: ignore[no-untyped-def]
+    connection = BankConnection(
+        owner_id=owner.id,
+        bank_slug="capital-one",
+        institution_id="ins-limitations",
+        institution_name="Capital One",
+        plaid_item_id="item-limitations",
+        plaid_environment="test",
+        lifecycle_status="active",
+    )
+    first = CardAccount(
+        connection=connection,
+        plaid_account_id="account-limit-1",
+        name="Venture",
+        mask="4812",
+        is_active=True,
+        display_order=0,
+    )
+    second = CardAccount(
+        connection=connection,
+        plaid_account_id="account-limit-2",
+        name="Savor",
+        mask="9921",
+        is_active=True,
+        display_order=1,
+    )
+    db_session.add_all([connection, first, second])
+    await db_session.flush()
+
+    rows = [
+        (first, "paze-1", True),
+        (first, "paze-2", False),
+        (second, "paze-3", False),
+    ]
+    for card, transaction_id, pending in rows:
+        db_session.add(
+            Transaction(
+                plaid_transaction_id=transaction_id,
+                card_account_id=card.id,
+                authorized_date=date(2026, 8, 20),
+                posted_date=None if pending else date(2026, 8, 21),
+                merchant_name="Paze",
+                name="Paze checkout",
+                original_description="PAZE*CHECKOUT",
+                amount_cents=1000,
+                currency_code="USD",
+                pending=pending,
+                search_text="paze paze checkout paze*checkout",
+            )
+        )
+    await db_session.flush()
+    return first, second
+
+
+def _all_time_request(**overrides):  # type: ignore[no-untyped-def]
+    values = {
+        "keyword": " Paze ",
+        "threshold": 2,
+        "card_scope": "all_cards",
+        "card_ids": [],
+        "window": AllTimeWindow(type="all_time"),
+        "is_enabled": True,
+    }
+    values.update(overrides)
+    return CreateTransactionLimitationRequest(**values)
+
+
+async def test_all_time_alerts_are_per_card_and_include_pending(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, second = await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+    created = await service.create_rule(owner.id, _all_time_request())
+
+    assert created.rule.keyword == "Paze"
+    assert created.rule.normalized_keyword == "paze"
+
+    result = await service.evaluate_active_alerts(owner.id)
+
+    assert [alert.card.id for alert in result.alerts] == [first.id]
+    assert result.alerts[0].match_count == 2
+    assert result.alerts[0].pending_count == 1
+    assert result.alerts[0].threshold == 2
+    assert second.id not in {alert.card.id for alert in result.alerts}
+
+
+async def test_multiple_overlapping_and_short_keywords_are_counted_independently(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, second = await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+    await service.create_rule(owner.id, _all_time_request(keyword="Paze"))
+    await service.create_rule(
+        owner.id,
+        _all_time_request(keyword="Paze checkout", threshold=1),
+    )
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            keyword="Pa",
+            card_scope="selected_cards",
+            card_ids=[first.id],
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(owner.id)
+    alerts = {(alert.keyword, alert.card.id): alert.match_count for alert in result.alerts}
+
+    assert alerts == {
+        ("Paze", first.id): 2,
+        ("Paze checkout", first.id): 2,
+        ("Paze checkout", second.id): 1,
+        ("Pa", first.id): 2,
+    }
+
+
+async def test_selected_card_rules_reject_missing_or_unowned_cards(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+
+    with pytest.raises(AppError) as missing:
+        await service.create_rule(
+            owner.id,
+            _all_time_request(card_scope="selected_cards", card_ids=[]),
+        )
+    assert missing.value.code == "REQUEST_INVALID"
+
+    with pytest.raises(AppError) as unavailable:
+        await service.create_rule(
+            owner.id,
+            _all_time_request(
+                card_scope="selected_cards", card_ids=["not-the-owner-card"]
+            ),
+        )
+    assert unavailable.value.code == "REQUEST_INVALID"
+
+
+async def test_orphaned_selected_card_rule_can_still_be_disabled(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    owner_id = owner.id
+    service = LimitationService(db_session)
+    created = await service.create_rule(
+        owner_id,
+        _all_time_request(card_scope="selected_cards", card_ids=[first.id]),
+    )
+    rule_id = created.rule.id
+    await db_session.commit()
+
+    await db_session.execute(delete(CardAccount).where(CardAccount.id == first.id))
+    await db_session.commit()
+    db_session.expire_all()
+
+    updated = await service.update_rule(
+        owner_id,
+        rule_id,
+        UpdateTransactionLimitationRequest(is_enabled=False),
+    )
+
+    assert updated.rule.is_enabled is False
+    assert updated.card_ids == []
+
+
+async def test_disabled_rules_do_not_produce_alerts(db_session, owner) -> None:  # type: ignore[no-untyped-def]
+    await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+    await service.create_rule(owner.id, _all_time_request(is_enabled=False))
+
+    assert (await service.evaluate_active_alerts(owner.id)).alerts == []
+
+
+async def test_rolling_five_days_is_inclusive_and_uses_posted_date_first(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    for transaction_id, authorized, posted in (
+        ("rolling-boundary", date(2026, 8, 1), date(2026, 8, 18)),
+        ("rolling-too-old", date(2026, 8, 22), date(2026, 8, 17)),
+    ):
+        db_session.add(
+            Transaction(
+                plaid_transaction_id=transaction_id,
+                card_account_id=first.id,
+                authorized_date=authorized,
+                posted_date=posted,
+                merchant_name="Paze",
+                name="Paze checkout",
+                original_description="PAZE*CHECKOUT",
+                amount_cents=1000,
+                currency_code="USD",
+                pending=False,
+                search_text="paze paze checkout paze*checkout",
+            )
+        )
+    await db_session.flush()
+
+    service = LimitationService(db_session)
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            threshold=3,
+            window=RollingWindow(type="rolling", days=5),
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(
+        owner.id,
+        as_of_date=date(2026, 8, 22),
+    )
+
+    assert result.alerts[0].match_count == 3
+    assert result.alerts[0].window.type == "rolling"
+    assert result.alerts[0].window.days == 5
+    assert result.alerts[0].window.effective_start_date == date(2026, 8, 18)
+    assert result.alerts[0].window.effective_end_date == date(2026, 8, 22)
+
+
+async def test_fixed_window_includes_boundaries_and_uses_posted_date_first(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    db_session.add(
+        Transaction(
+            plaid_transaction_id="fixed-posted-outside",
+            card_account_id=first.id,
+            authorized_date=date(2026, 8, 20),
+            posted_date=date(2026, 8, 19),
+            merchant_name="Paze",
+            name="Paze checkout",
+            original_description="PAZE*CHECKOUT",
+            amount_cents=1000,
+            currency_code="USD",
+            pending=False,
+            search_text="paze paze checkout paze*checkout",
+        )
+    )
+    await db_session.flush()
+
+    service = LimitationService(db_session)
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            threshold=2,
+            window=FixedWindow(
+                type="fixed",
+                start_date=date(2026, 8, 20),
+                end_date=date(2026, 8, 21),
+            ),
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(owner.id)
+
+    assert result.alerts[0].match_count == 2
+    assert result.alerts[0].window.type == "fixed"
+    assert result.alerts[0].window.effective_start_date == date(2026, 8, 20)
+    assert result.alerts[0].window.effective_end_date == date(2026, 8, 21)

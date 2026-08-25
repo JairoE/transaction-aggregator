@@ -208,6 +208,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transaction-limit-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Transaction Limit Alerts */
+        get: operations["list_transaction_limit_alerts_api_transaction_limit_alerts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transaction-limitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Transaction Limitations */
+        get: operations["list_transaction_limitations_api_transaction_limitations_get"];
+        put?: never;
+        /** Create Transaction Limitation */
+        post: operations["create_transaction_limitation_api_transaction_limitations_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transaction-limitations/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Transaction Limitation */
+        delete: operations["delete_transaction_limitation_api_transaction_limitations__rule_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Transaction Limitation */
+        patch: operations["update_transaction_limitation_api_transaction_limitations__rule_id__patch"];
+        trace?: never;
+    };
     "/api/transactions/search": {
         parameters: {
             query?: never;
@@ -246,6 +299,14 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** AllTimeWindow */
+        AllTimeWindow: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "all_time";
+        };
         /** BankConnectionResponse */
         BankConnectionResponse: {
             /**
@@ -358,6 +419,99 @@ export interface components {
              */
             confirm_trial_slot: boolean;
         };
+        /** CreateTransactionLimitationRequest */
+        CreateTransactionLimitationRequest: {
+            /** Card Ids */
+            card_ids?: string[];
+            /**
+             * Card Scope
+             * @enum {string}
+             */
+            card_scope: "all_cards" | "selected_cards";
+            /**
+             * Is Enabled
+             * @default true
+             */
+            is_enabled: boolean;
+            /** Keyword */
+            keyword: string;
+            /** Threshold */
+            threshold: number;
+            /** Window */
+            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"];
+        };
+        /** EvaluatedAllTimeWindow */
+        EvaluatedAllTimeWindow: {
+            /** Days */
+            days?: null;
+            /** Effective End Date */
+            effective_end_date?: null;
+            /** Effective Start Date */
+            effective_start_date?: null;
+            /** End Date */
+            end_date?: null;
+            /** Start Date */
+            start_date?: null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "all_time";
+        };
+        /** EvaluatedFixedWindow */
+        EvaluatedFixedWindow: {
+            /** Days */
+            days?: null;
+            /**
+             * Effective End Date
+             * Format: date
+             */
+            effective_end_date: string;
+            /**
+             * Effective Start Date
+             * Format: date
+             */
+            effective_start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "fixed";
+        };
+        /** EvaluatedRollingWindow */
+        EvaluatedRollingWindow: {
+            /** Days */
+            days: number;
+            /**
+             * Effective End Date
+             * Format: date
+             */
+            effective_end_date: string;
+            /**
+             * Effective Start Date
+             * Format: date
+             */
+            effective_start_date: string;
+            /** End Date */
+            end_date?: null;
+            /** Start Date */
+            start_date?: null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rolling";
+        };
         /** ExchangePublicTokenRequest */
         ExchangePublicTokenRequest: {
             /**
@@ -387,6 +541,24 @@ export interface components {
             institution_name: string;
             /** Sync Job Id */
             sync_job_id: string | null;
+        };
+        /** FixedWindow */
+        FixedWindow: {
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "fixed";
         };
         /** GroupedSearchResponse */
         GroupedSearchResponse: {
@@ -441,6 +613,16 @@ export interface components {
             /** Id */
             id: string;
         };
+        /** RollingWindow */
+        RollingWindow: {
+            /** Days */
+            days: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            type: "rolling";
+        };
         /** SessionResponse */
         SessionResponse: {
             /** Csrf Token */
@@ -482,6 +664,78 @@ export interface components {
             /** Running */
             running: number;
         };
+        /** TransactionLimitAlertListResponse */
+        TransactionLimitAlertListResponse: {
+            /** Alerts */
+            alerts: components["schemas"]["TransactionLimitAlertResponse"][];
+            /**
+             * As Of Date
+             * Format: date
+             */
+            as_of_date: string;
+            /** Cache As Of */
+            cache_as_of: string | null;
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+        };
+        /** TransactionLimitAlertResponse */
+        TransactionLimitAlertResponse: {
+            card: components["schemas"]["CardResponse"];
+            /** Keyword */
+            keyword: string;
+            /** Match Count */
+            match_count: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Rule Id */
+            rule_id: string;
+            /** Threshold */
+            threshold: number;
+            /** Window */
+            window: components["schemas"]["EvaluatedAllTimeWindow"] | components["schemas"]["EvaluatedRollingWindow"] | components["schemas"]["EvaluatedFixedWindow"];
+        };
+        /** TransactionLimitationListResponse */
+        TransactionLimitationListResponse: {
+            /** Cards */
+            cards: components["schemas"]["CardResponse"][];
+            /** Rules */
+            rules: components["schemas"]["TransactionLimitationResponse"][];
+        };
+        /** TransactionLimitationResponse */
+        TransactionLimitationResponse: {
+            /** Card Ids */
+            card_ids: string[];
+            /**
+             * Card Scope
+             * @enum {string}
+             */
+            card_scope: "all_cards" | "selected_cards";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Is Enabled */
+            is_enabled: boolean;
+            /** Keyword */
+            keyword: string;
+            /** Needs Card Selection */
+            needs_card_selection: boolean;
+            /** Threshold */
+            threshold: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Window */
+            window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"];
+        };
         /** TransactionMatch */
         TransactionMatch: {
             /** Amount Cents */
@@ -506,6 +760,21 @@ export interface components {
             pending: boolean;
             /** Posted Date */
             posted_date: string | null;
+        };
+        /** UpdateTransactionLimitationRequest */
+        UpdateTransactionLimitationRequest: {
+            /** Card Ids */
+            card_ids?: string[] | null;
+            /** Card Scope */
+            card_scope?: ("all_cards" | "selected_cards") | null;
+            /** Is Enabled */
+            is_enabled?: boolean | null;
+            /** Keyword */
+            keyword?: string | null;
+            /** Threshold */
+            threshold?: number | null;
+            /** Window */
+            window?: (components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"]) | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -850,6 +1119,143 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncStatusResponse"];
+                };
+            };
+        };
+    };
+    list_transaction_limit_alerts_api_transaction_limit_alerts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionLimitAlertListResponse"];
+                };
+            };
+        };
+    };
+    list_transaction_limitations_api_transaction_limitations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionLimitationListResponse"];
+                };
+            };
+        };
+    };
+    create_transaction_limitation_api_transaction_limitations_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTransactionLimitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionLimitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_transaction_limitation_api_transaction_limitations__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_transaction_limitation_api_transaction_limitations__rule_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTransactionLimitationRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionLimitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

@@ -1,11 +1,13 @@
 import { useRef } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
+import { Link } from 'react-router-dom'
 import { describeAmount, formatAmount, formatShortDate } from './format'
 import { highlightText } from './highlight'
 import { useSearchQuery } from './SearchContext'
 import type { TransactionMatch } from './api'
 
 export interface TransactionListProps {
+  cardId: string
   transactions: TransactionMatch[]
   height: number
 }
@@ -14,9 +16,13 @@ export interface TransactionListProps {
  * simpler and avoids any dependency on the (jsdom-unsupported) ResizeObserver
  * actually reporting real measurements. */
 const VIRTUALIZATION_THRESHOLD = 50
-const ESTIMATED_ROW_HEIGHT = 76
+const ESTIMATED_ROW_HEIGHT = 92
 
-function TransactionRow({ transaction, query }: { transaction: TransactionMatch; query: string }) {
+function TransactionRow({ cardId, transaction, query }: {
+  cardId: string
+  transaction: TransactionMatch
+  query: string
+}) {
   const merchantLabel = transaction.merchant_name || transaction.description
   const hasQuery = query.trim().length > 0
   const normalizedOriginal = transaction.original_description?.trim().toLowerCase()
@@ -45,12 +51,19 @@ function TransactionRow({ transaction, query }: { transaction: TransactionMatch;
       <p className="transaction-row__meta">
         {dateValue && <time dateTime={dateValue}>{formatShortDate(dateValue)}</time>}
         {transaction.pending && <span className="transaction-row__pending">Pending</span>}
+        <Link
+          className="transaction-row__alert-link"
+          aria-label={`Set alert for ${merchantLabel}`}
+          to={`/transaction-limitations?keyword=${encodeURIComponent(merchantLabel)}&card_id=${encodeURIComponent(cardId)}`}
+        >
+          Set alert
+        </Link>
       </p>
     </div>
   )
 }
 
-export function TransactionList({ transactions, height }: TransactionListProps) {
+export function TransactionList({ cardId, transactions, height }: TransactionListProps) {
   const query = useSearchQuery()
   const scrollRef = useRef<HTMLDivElement>(null)
   const shouldVirtualize = transactions.length > VIRTUALIZATION_THRESHOLD
@@ -68,7 +81,7 @@ export function TransactionList({ transactions, height }: TransactionListProps) 
         <ul className="transaction-list__rows">
           {transactions.map((transaction) => (
             <li className="transaction-list__row" key={transaction.id}>
-              <TransactionRow transaction={transaction} query={query} />
+              <TransactionRow cardId={cardId} transaction={transaction} query={query} />
             </li>
           ))}
         </ul>
@@ -100,7 +113,7 @@ export function TransactionList({ transactions, height }: TransactionListProps) 
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >
-              <TransactionRow transaction={transaction} query={query} />
+              <TransactionRow cardId={cardId} transaction={transaction} query={query} />
             </li>
           )
         })}

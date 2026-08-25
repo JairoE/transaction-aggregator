@@ -1,6 +1,20 @@
 {
   "components": {
     "schemas": {
+      "AllTimeWindow": {
+        "properties": {
+          "type": {
+            "const": "all_time",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "AllTimeWindow",
+        "type": "object"
+      },
       "BankConnectionResponse": {
         "properties": {
           "action": {
@@ -329,6 +343,190 @@
         "title": "CreateLinkTokenRequest",
         "type": "object"
       },
+      "CreateTransactionLimitationRequest": {
+        "properties": {
+          "card_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Card Ids",
+            "type": "array"
+          },
+          "card_scope": {
+            "enum": [
+              "all_cards",
+              "selected_cards"
+            ],
+            "title": "Card Scope",
+            "type": "string"
+          },
+          "is_enabled": {
+            "default": true,
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "keyword": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Keyword",
+            "type": "string"
+          },
+          "threshold": {
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Threshold",
+            "type": "integer"
+          },
+          "window": {
+            "discriminator": {
+              "mapping": {
+                "all_time": "#/components/schemas/AllTimeWindow",
+                "fixed": "#/components/schemas/FixedWindow",
+                "rolling": "#/components/schemas/RollingWindow"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AllTimeWindow"
+              },
+              {
+                "$ref": "#/components/schemas/RollingWindow"
+              },
+              {
+                "$ref": "#/components/schemas/FixedWindow"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "keyword",
+          "threshold",
+          "card_scope",
+          "window"
+        ],
+        "title": "CreateTransactionLimitationRequest",
+        "type": "object"
+      },
+      "EvaluatedAllTimeWindow": {
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "null"
+          },
+          "effective_end_date": {
+            "title": "Effective End Date",
+            "type": "null"
+          },
+          "effective_start_date": {
+            "title": "Effective Start Date",
+            "type": "null"
+          },
+          "end_date": {
+            "title": "End Date",
+            "type": "null"
+          },
+          "start_date": {
+            "title": "Start Date",
+            "type": "null"
+          },
+          "type": {
+            "const": "all_time",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "EvaluatedAllTimeWindow",
+        "type": "object"
+      },
+      "EvaluatedFixedWindow": {
+        "properties": {
+          "days": {
+            "title": "Days",
+            "type": "null"
+          },
+          "effective_end_date": {
+            "format": "date",
+            "title": "Effective End Date",
+            "type": "string"
+          },
+          "effective_start_date": {
+            "format": "date",
+            "title": "Effective Start Date",
+            "type": "string"
+          },
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "type": {
+            "const": "fixed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "start_date",
+          "end_date",
+          "effective_start_date",
+          "effective_end_date"
+        ],
+        "title": "EvaluatedFixedWindow",
+        "type": "object"
+      },
+      "EvaluatedRollingWindow": {
+        "properties": {
+          "days": {
+            "maximum": 730.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "effective_end_date": {
+            "format": "date",
+            "title": "Effective End Date",
+            "type": "string"
+          },
+          "effective_start_date": {
+            "format": "date",
+            "title": "Effective Start Date",
+            "type": "string"
+          },
+          "end_date": {
+            "title": "End Date",
+            "type": "null"
+          },
+          "start_date": {
+            "title": "Start Date",
+            "type": "null"
+          },
+          "type": {
+            "const": "rolling",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "days",
+          "effective_start_date",
+          "effective_end_date"
+        ],
+        "title": "EvaluatedRollingWindow",
+        "type": "object"
+      },
       "ExchangePublicTokenRequest": {
         "properties": {
           "bank": {
@@ -413,6 +611,32 @@
           "sync_job_id"
         ],
         "title": "ExchangeResponse",
+        "type": "object"
+      },
+      "FixedWindow": {
+        "properties": {
+          "end_date": {
+            "format": "date",
+            "title": "End Date",
+            "type": "string"
+          },
+          "start_date": {
+            "format": "date",
+            "title": "Start Date",
+            "type": "string"
+          },
+          "type": {
+            "const": "fixed",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "start_date",
+          "end_date"
+        ],
+        "title": "FixedWindow",
         "type": "object"
       },
       "GroupedSearchResponse": {
@@ -553,6 +777,27 @@
         "title": "OwnerResponse",
         "type": "object"
       },
+      "RollingWindow": {
+        "properties": {
+          "days": {
+            "maximum": 730.0,
+            "minimum": 1.0,
+            "title": "Days",
+            "type": "integer"
+          },
+          "type": {
+            "const": "rolling",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "days"
+        ],
+        "title": "RollingWindow",
+        "type": "object"
+      },
       "SessionResponse": {
         "properties": {
           "csrf_token": {
@@ -676,6 +921,216 @@
         "title": "SyncStatusResponse",
         "type": "object"
       },
+      "TransactionLimitAlertListResponse": {
+        "properties": {
+          "alerts": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionLimitAlertResponse"
+            },
+            "title": "Alerts",
+            "type": "array"
+          },
+          "as_of_date": {
+            "format": "date",
+            "title": "As Of Date",
+            "type": "string"
+          },
+          "cache_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache As Of"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "alerts",
+          "evaluated_at",
+          "as_of_date",
+          "cache_as_of"
+        ],
+        "title": "TransactionLimitAlertListResponse",
+        "type": "object"
+      },
+      "TransactionLimitAlertResponse": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/CardResponse"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "string"
+          },
+          "match_count": {
+            "title": "Match Count",
+            "type": "integer"
+          },
+          "pending_count": {
+            "title": "Pending Count",
+            "type": "integer"
+          },
+          "rule_id": {
+            "title": "Rule Id",
+            "type": "string"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "integer"
+          },
+          "window": {
+            "discriminator": {
+              "mapping": {
+                "all_time": "#/components/schemas/EvaluatedAllTimeWindow",
+                "fixed": "#/components/schemas/EvaluatedFixedWindow",
+                "rolling": "#/components/schemas/EvaluatedRollingWindow"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EvaluatedAllTimeWindow"
+              },
+              {
+                "$ref": "#/components/schemas/EvaluatedRollingWindow"
+              },
+              {
+                "$ref": "#/components/schemas/EvaluatedFixedWindow"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "rule_id",
+          "keyword",
+          "threshold",
+          "card",
+          "match_count",
+          "pending_count",
+          "window"
+        ],
+        "title": "TransactionLimitAlertResponse",
+        "type": "object"
+      },
+      "TransactionLimitationListResponse": {
+        "properties": {
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardResponse"
+            },
+            "title": "Cards",
+            "type": "array"
+          },
+          "rules": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionLimitationResponse"
+            },
+            "title": "Rules",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rules",
+          "cards"
+        ],
+        "title": "TransactionLimitationListResponse",
+        "type": "object"
+      },
+      "TransactionLimitationResponse": {
+        "properties": {
+          "card_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Card Ids",
+            "type": "array"
+          },
+          "card_scope": {
+            "enum": [
+              "all_cards",
+              "selected_cards"
+            ],
+            "title": "Card Scope",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "is_enabled": {
+            "title": "Is Enabled",
+            "type": "boolean"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "string"
+          },
+          "needs_card_selection": {
+            "title": "Needs Card Selection",
+            "type": "boolean"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "window": {
+            "discriminator": {
+              "mapping": {
+                "all_time": "#/components/schemas/AllTimeWindow",
+                "fixed": "#/components/schemas/FixedWindow",
+                "rolling": "#/components/schemas/RollingWindow"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/AllTimeWindow"
+              },
+              {
+                "$ref": "#/components/schemas/RollingWindow"
+              },
+              {
+                "$ref": "#/components/schemas/FixedWindow"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "required": [
+          "id",
+          "keyword",
+          "threshold",
+          "card_scope",
+          "card_ids",
+          "window",
+          "is_enabled",
+          "needs_card_selection",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TransactionLimitationResponse",
+        "type": "object"
+      },
       "TransactionMatch": {
         "properties": {
           "amount_cents": {
@@ -774,6 +1229,108 @@
           "pending"
         ],
         "title": "TransactionMatch",
+        "type": "object"
+      },
+      "UpdateTransactionLimitationRequest": {
+        "properties": {
+          "card_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Ids"
+          },
+          "card_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all_cards",
+                  "selected_cards"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Scope"
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          },
+          "keyword": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keyword"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "window": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "all_time": "#/components/schemas/AllTimeWindow",
+                    "fixed": "#/components/schemas/FixedWindow",
+                    "rolling": "#/components/schemas/RollingWindow"
+                  },
+                  "propertyName": "type"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/AllTimeWindow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/RollingWindow"
+                  },
+                  {
+                    "$ref": "#/components/schemas/FixedWindow"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Window"
+          }
+        },
+        "title": "UpdateTransactionLimitationRequest",
         "type": "object"
       },
       "ValidationError": {
@@ -1243,6 +1800,172 @@
         "summary": "Sync Status",
         "tags": [
           "sync"
+        ]
+      }
+    },
+    "/api/transaction-limit-alerts": {
+      "get": {
+        "operationId": "list_transaction_limit_alerts_api_transaction_limit_alerts_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionLimitAlertListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Transaction Limit Alerts",
+        "tags": [
+          "transaction-limitations"
+        ]
+      }
+    },
+    "/api/transaction-limitations": {
+      "get": {
+        "operationId": "list_transaction_limitations_api_transaction_limitations_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionLimitationListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Transaction Limitations",
+        "tags": [
+          "transaction-limitations"
+        ]
+      },
+      "post": {
+        "operationId": "create_transaction_limitation_api_transaction_limitations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransactionLimitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionLimitationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Transaction Limitation",
+        "tags": [
+          "transaction-limitations"
+        ]
+      }
+    },
+    "/api/transaction-limitations/{rule_id}": {
+      "delete": {
+        "operationId": "delete_transaction_limitation_api_transaction_limitations__rule_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Transaction Limitation",
+        "tags": [
+          "transaction-limitations"
+        ]
+      },
+      "patch": {
+        "operationId": "update_transaction_limitation_api_transaction_limitations__rule_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "rule_id",
+            "required": true,
+            "schema": {
+              "title": "Rule Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTransactionLimitationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionLimitationResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Transaction Limitation",
+        "tags": [
+          "transaction-limitations"
         ]
       }
     },

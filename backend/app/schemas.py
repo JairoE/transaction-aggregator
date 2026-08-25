@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 BankSlug = Literal["capital-one", "chase", "citi", "wells-fargo"]
 
@@ -128,20 +128,145 @@ class GroupedSearchResponse(BaseModel):
     cache_as_of: datetime | None
 
 
+class AllTimeWindow(BaseModel):
+    type: Literal["all_time"]
+
+
+class RollingWindow(BaseModel):
+    type: Literal["rolling"]
+    days: int = Field(ge=1, le=730)
+
+
+class FixedWindow(BaseModel):
+    type: Literal["fixed"]
+    start_date: date
+    end_date: date
+
+    @model_validator(mode="after")
+    def dates_are_ordered(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError("start_date must be on or before end_date")
+        return self
+
+
+TransactionWindow = Annotated[
+    AllTimeWindow | RollingWindow | FixedWindow,
+    Field(discriminator="type"),
+]
+
+
+class CreateTransactionLimitationRequest(BaseModel):
+    keyword: str = Field(min_length=1, max_length=100)
+    threshold: int = Field(ge=1, le=10_000)
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str] = Field(default_factory=list, max_length=100)
+    window: TransactionWindow
+    is_enabled: bool = True
+
+
+class UpdateTransactionLimitationRequest(BaseModel):
+    keyword: str | None = Field(default=None, min_length=1, max_length=100)
+    threshold: int | None = Field(default=None, ge=1, le=10_000)
+    card_scope: Literal["all_cards", "selected_cards"] | None = None
+    card_ids: list[str] | None = Field(default=None, max_length=100)
+    window: TransactionWindow | None = None
+    is_enabled: bool | None = None
+
+
+class TransactionLimitationResponse(BaseModel):
+    id: str
+    keyword: str
+    threshold: int
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str]
+    window: TransactionWindow
+    is_enabled: bool
+    needs_card_selection: bool
+    created_at: datetime
+    updated_at: datetime
+
+
+class TransactionLimitationListResponse(BaseModel):
+    rules: list[TransactionLimitationResponse]
+    cards: list[CardResponse]
+
+
+class EvaluatedAllTimeWindow(BaseModel):
+    type: Literal["all_time"]
+    days: None = None
+    start_date: None = None
+    end_date: None = None
+    effective_start_date: None = None
+    effective_end_date: None = None
+
+
+class EvaluatedRollingWindow(BaseModel):
+    type: Literal["rolling"]
+    days: int = Field(ge=1, le=730)
+    start_date: None = None
+    end_date: None = None
+    effective_start_date: date
+    effective_end_date: date
+
+
+class EvaluatedFixedWindow(BaseModel):
+    type: Literal["fixed"]
+    days: None = None
+    start_date: date
+    end_date: date
+    effective_start_date: date
+    effective_end_date: date
+
+
+EvaluatedTransactionWindow = Annotated[
+    EvaluatedAllTimeWindow | EvaluatedRollingWindow | EvaluatedFixedWindow,
+    Field(discriminator="type"),
+]
+
+
+class TransactionLimitAlertResponse(BaseModel):
+    rule_id: str
+    keyword: str
+    threshold: int
+    card: CardResponse
+    match_count: int
+    pending_count: int
+    window: EvaluatedTransactionWindow
+
+
+class TransactionLimitAlertListResponse(BaseModel):
+    alerts: list[TransactionLimitAlertResponse]
+    evaluated_at: datetime
+    as_of_date: date
+    cache_as_of: datetime | None
+
+
 __all__ = [
     "BankConnectionResponse",
+    "AllTimeWindow",
     "CardTransactionGroup",
     "GroupedSearchResponse",
     "TransactionMatch",
     "BankSlug",
     "CardResponse",
     "ConnectionsResponse",
+    "CreateTransactionLimitationRequest",
     "CreateLinkTokenRequest",
     "ErrorResponse",
     "ExchangePublicTokenRequest",
     "ExchangeResponse",
+    "EvaluatedAllTimeWindow",
+    "EvaluatedFixedWindow",
+    "EvaluatedRollingWindow",
     "LinkTokenResponse",
     "LoginRequest",
+    "RollingWindow",
+    "FixedWindow",
     "OwnerResponse",
     "SessionResponse",
+    "TransactionLimitationListResponse",
+    "TransactionLimitationResponse",
+    "TransactionLimitAlertListResponse",
+    "TransactionLimitAlertResponse",
+    "UpdateTransactionLimitationRequest",
 ]

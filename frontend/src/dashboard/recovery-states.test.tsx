@@ -28,6 +28,9 @@ function findCard(name: string): HTMLElement {
 async function renderDashboard() {
   const utils = renderAppAt('/dashboard')
   await screen.findByRole('heading', { name: /your credit cards/i })
+  await screen.findByRole('region', {
+    name: new RegExp(`ending in ${DASHBOARD_CARDS[0].mask}`, 'i'),
+  })
   return utils
 }
 

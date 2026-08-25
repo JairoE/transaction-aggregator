@@ -56,13 +56,13 @@ describe('bank connections', () => {
       '/',
       '/connections',
       '/dashboard',
-      '/search-history',
+      '/transaction-limitations',
     ])
     expect(steps[0]).toHaveTextContent('Completed: Sign in')
     expect(steps[1]).toHaveAttribute('aria-current', 'step')
     expect(steps[1]).toHaveTextContent('Current: Connect banks')
     expect(steps[2]).toHaveTextContent('View cards')
-    expect(steps[3]).toHaveTextContent('Search history')
+    expect(steps[3]).toHaveTextContent('Alerts & limits')
     expect(progress).not.toHaveTextContent(/\b0[1-4]\b/)
   })
 

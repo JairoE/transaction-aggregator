@@ -16,6 +16,10 @@ import { fetchCardTransactions, fetchTransactionSearch } from './api'
 import { buildFleetSummary, buildResultsSummary, formatSyncStatus } from './format'
 import { persistSearchResult, readPersistedSearchResult } from './searchCache'
 import { recordSearchHistory } from './searchHistory'
+import {
+  fetchTransactionLimitAlerts,
+  TRANSACTION_LIMIT_ALERTS_QUERY_KEY,
+} from '../limitations/api'
 
 type ConnectionsResponse = components['schemas']['ConnectionsResponse']
 
@@ -53,6 +57,14 @@ export function DashboardPage() {
       owner ? readPersistedSearchResult(owner.id, submittedQuery)?.data : undefined,
     initialDataUpdatedAt: () =>
       owner ? readPersistedSearchResult(owner.id, submittedQuery)?.cachedAt : undefined,
+  })
+
+  const limitationAlertsQuery = useQuery({
+    queryKey: TRANSACTION_LIMIT_ALERTS_QUERY_KEY,
+    queryFn: fetchTransactionLimitAlerts,
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: false,
   })
 
   // Persist every successful search result to sessionStorage (see
@@ -103,9 +115,15 @@ export function DashboardPage() {
             has_more: extra.hasMore,
           }
         : group
-      return { ...merged, isLoadingMore: pendingCardId === group.card.id }
+      return {
+        ...merged,
+        isLoadingMore: pendingCardId === group.card.id,
+        limitationAlerts: (limitationAlertsQuery.data?.alerts ?? []).filter(
+          (alert) => alert.card.id === group.card.id,
+        ),
+      }
     })
-  }, [searchQuery.data, pageState, pendingCardId])
+  }, [searchQuery.data, pageState, pendingCardId, limitationAlertsQuery.data])
 
   const cardCount = searchQuery.data?.card_count ?? 0
   const bankCount = useMemo(
@@ -152,6 +170,16 @@ export function DashboardPage() {
           cacheAsOf={searchQuery.data?.cache_as_of ?? null}
           isOnline={isOnline}
         />
+
+        {limitationAlertsQuery.isError && (
+          <p
+            className="dashboard-page__alert-status"
+            role="status"
+            aria-label="Transaction limit alerts"
+          >
+            Transaction limit alerts are temporarily unavailable. Your cards and transactions are still available.
+          </p>
+        )}
 
         <div className="dashboard-page__meta">
           <p className="dashboard-page__meta-text">

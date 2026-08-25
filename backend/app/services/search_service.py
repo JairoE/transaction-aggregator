@@ -16,7 +16,8 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from hashlib import sha256
 
-from sqlalchemy import Select, func, literal_column, or_, select, text
+from sqlalchemy import Select, func, literal_column, or_, select, text, true
+from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError
@@ -60,6 +61,22 @@ def normalize_query(query: str | None) -> NormalizedQuery:
         normalized.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     )
     return NormalizedQuery(raw, normalized, False, False, None, f"%{like}%")
+
+
+def transaction_match_filter(normalized: NormalizedQuery) -> ColumnElement[bool]:
+    """Return the shared literal-substring predicate for cached transactions."""
+
+    if normalized.is_blank:
+        return true()
+    if normalized.uses_index:
+        matching_rowids = (
+            select(literal_column("rowid"))
+            .select_from(text("transactions_fts"))
+            .where(text("transactions_fts MATCH :fts_query"))
+            .params(fts_query=normalized.fts_expression)
+        )
+        return literal_column("transactions.rowid").in_(matching_rowids)
+    return Transaction.search_text.like(normalized.like_pattern or "", escape="\\")
 
 
 @dataclass(frozen=True)
@@ -286,27 +303,10 @@ class SearchService:
 
     # --- query building ---------------------------------------------------
     def _matching(self, card_id: str, normalized: NormalizedQuery) -> Select[tuple]:
-        statement = select(Transaction).where(Transaction.card_account_id == card_id)
-        if normalized.is_blank:
-            return statement
-
-        if normalized.uses_index:
-            # The trigram FTS5 index is keyed by the transactions rowid.
-            matching_rowids = (
-                select(literal_column("rowid"))
-                .select_from(text("transactions_fts"))
-                .where(text("transactions_fts MATCH :fts_query"))
-                .params(fts_query=normalized.fts_expression)
-            )
-            return statement.where(
-                literal_column("transactions.rowid").in_(matching_rowids)
-            )
-
-        # Needles shorter than a trigram cannot use the index; fall back to an
-        # escaped LIKE over the normalized column, still fully parameterized.
-        pattern = normalized.like_pattern or ""
-        return statement.where(
-            Transaction.search_text.like(pattern, escape="\\")
+        return (
+            select(Transaction)
+            .where(Transaction.card_account_id == card_id)
+            .where(transaction_match_filter(normalized))
         )
 
     async def _count(self, card_id: str, normalized: NormalizedQuery) -> int:
@@ -371,6 +371,7 @@ __all__ = [
     "GroupedSearchResult",
     "NormalizedQuery",
     "SearchService",
+    "transaction_match_filter",
     "TransactionRow",
     "normalize_query",
 ]
