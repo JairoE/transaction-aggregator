@@ -27,6 +27,33 @@ The `demo` fixture (`DEMO_BANKS` and `PAZE_FIXTURE` in `demo_gateway.py`) implem
 
 ## 4. First run (demo, no credentials needed)
 
+### Disposable branch or worktree preview
+
+For feature review, use the zero-configuration preview instead of copying
+ignored runtime files into a worktree:
+
+```bash
+make preview
+```
+
+The command installs dependencies, builds the frontend, generates temporary
+settings, migrates a temporary SQLite database, creates a preview owner, and
+prints the URL and random credentials. It uses the deterministic demo bank and
+removes its database when stopped with Ctrl-C. It does not read or modify
+`backend/.env` or `backend/data/`.
+
+For a tunnel whose public HTTPS URL is already known, point the tunnel at the
+selected local port and run:
+
+```bash
+PREVIEW_PORT=8000 PREVIEW_BASE_URL=https://your-tunnel.example.com make preview
+```
+
+Open the public URL printed by the command so its trusted-host, CSRF-origin,
+and secure-cookie settings match the browser origin.
+
+### Persistent local demo installation
+
 ```bash
 make install
 ```

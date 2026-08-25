@@ -16,7 +16,32 @@ remain grouped per card on the dashboard. See the
 [transaction limitations PRD](docs/features/transaction-limitations/PRD.md)
 for the full behavior contract.
 
-## Run it (demo bank, no credentials needed)
+## Preview a branch with zero local configuration
+
+```bash
+make preview
+```
+
+This installs dependencies, builds the frontend, generates temporary secrets,
+migrates a disposable SQLite database, creates a preview owner, and starts the
+real application with the deterministic demo banks. It does not read or create
+`backend/.env` or `backend/data/`. Open the URL and use the random password
+printed by the command; pressing Ctrl-C stops the server and removes the
+temporary database.
+
+If port 8000 is busy, the command automatically selects an available port. To
+preview through a tunnel with a known HTTPS URL, configure the tunnel to point
+at the local port and run:
+
+```bash
+PREVIEW_PORT=8000 PREVIEW_BASE_URL=https://your-tunnel.example.com make preview
+```
+
+Open `PREVIEW_BASE_URL`, not the local target. The preview derives its trusted
+host, CSRF origin, and secure-cookie settings from that URL. Preview mode always
+uses disposable demo data and never reads real Plaid credentials.
+
+## Run it persistently (demo bank, no credentials needed)
 
 ```bash
 make install
@@ -81,7 +106,8 @@ Two things to know before connecting a real bank:
   with a branch, merge, or worktree. Moving your setup somewhere else means
   copying those two by hand — the encryption key in `.env` is what decrypts the
   stored Plaid access tokens, so a mismatched key silently invalidates every
-  existing connection.
+  existing connection. Use `make preview` instead when reviewing an isolated
+  branch and persistent data is unnecessary.
 
 ## Other commands
 
@@ -90,8 +116,9 @@ make check
 ```
 
 Runs the backend suite, the frontend suite, TypeScript, and the production
-build. `make dev` runs the Vite dev server against a separately running API;
-`make e2e` runs the Playwright flows.
+build. `make preview` launches a disposable full-stack demo; `make dev` runs
+the Vite dev server against a separately running API; `make e2e` runs the
+Playwright flows.
 
 ```bash
 make sync
