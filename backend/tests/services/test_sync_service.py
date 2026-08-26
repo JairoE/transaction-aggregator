@@ -348,6 +348,25 @@ async def test_stale_connections_are_enqueued_at_startup(
     assert [job.trigger for job in jobs] == ["startup"]
 
 
+async def test_enqueue_threshold_is_independent_of_the_display_window(
+    db_session, connected_connection, drained_initial_job
+) -> None:
+    """A connection 90 minutes old is no longer *shown* as stale, but must
+    still be swept on the old 60-minute cadence. If this ever returns 0 the two
+    thresholds have been fused back together and syncing silently slowed down.
+    """
+
+    from app.services.connection_health import classify_connection_health
+    from app.services.sync_service import enqueue_stale_connections
+
+    connection = await db_session.get(BankConnection, connected_connection.id)
+    connection.last_successful_sync_at = utcnow() - timedelta(minutes=90)
+    await db_session.commit()
+
+    assert await enqueue_stale_connections(db_session, stale_after_minutes=60) == 1
+    assert classify_connection_health(connection, has_active_job=False).state == "ready"
+
+
 async def test_fresh_connections_are_not_enqueued(
     db_session, connected_connection, drained_initial_job
 ) -> None:

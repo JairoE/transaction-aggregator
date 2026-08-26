@@ -107,3 +107,27 @@ def test_sandbox_keeps_the_local_dev_server_origins() -> None:
 
     assert "http://127.0.0.1:5173" in settings.allowed_origins
     assert "http://localhost:5173" in settings.allowed_origins
+
+
+def test_display_stale_window_derives_from_the_sweep_interval() -> None:
+    """The display window must never collapse onto the enqueue threshold —
+    equal values flag healthy connections for up to a full sweep every cycle."""
+
+    default = Settings(_env_file=None, **{k.lower(): v for k, v in _env().items()})
+    assert default.sync_interval_minutes == 60
+    assert default.stale_display_minutes == 150
+
+    slower = Settings(
+        _env_file=None,
+        **{k.lower(): v for k, v in _env(SYNC_INTERVAL_MINUTES="240").items()},
+    )
+    assert slower.stale_display_minutes == 510
+
+
+def test_display_stale_window_accepts_an_explicit_override() -> None:
+    settings = Settings(
+        _env_file=None,
+        **{k.lower(): v for k, v in _env(DISPLAY_STALE_AFTER_MINUTES="90").items()},
+    )
+
+    assert settings.stale_display_minutes == 90

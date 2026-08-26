@@ -3,6 +3,13 @@
 Both the connections list and the dashboard read from here, so a bank can
 never appear healthy on one screen and broken on another. Provider error codes
 are used for classification only; the owner-facing copy never repeats them.
+
+The staleness threshold here decides when to *warn a human*, and is deliberately
+longer than the *enqueue* threshold `enqueue_stale_connections` uses (60 minutes,
+FR-SYNC-007/008). The two clocks are independent — the scheduler ticks from
+process start, a connection ages from its own last sync — so equal thresholds
+would flag healthy connections for up to a full sweep, every cycle. `stale` is
+worth surfacing only once automatic recovery has actually failed to keep up.
 """
 
 from __future__ import annotations
@@ -24,7 +31,7 @@ ConnectionState = Literal[
 ]
 ConnectionAction = Literal["none", "sync", "reconnect", "renew_consent"]
 
-STALE_AFTER_MINUTES = 60
+DISPLAY_STALE_AFTER_MINUTES = 150
 
 RECONNECT_CODES = frozenset(
     {
@@ -81,12 +88,22 @@ def classify_connection_health(
     connection: BankConnection,
     has_active_job: bool = False,
     now: datetime | None = None,
+    stale_after_minutes: int | None = None,
 ) -> ConnectionHealth:
     moment = now or utcnow()
     cache_as_of = connection.last_successful_sync_at
     error = connection.last_error_code
 
-    state, action = _resolve(connection, error, has_active_job, cache_as_of, moment)
+    state, action = _resolve(
+        connection,
+        error,
+        has_active_job,
+        cache_as_of,
+        moment,
+        stale_after_minutes
+        if stale_after_minutes is not None
+        else DISPLAY_STALE_AFTER_MINUTES,
+    )
 
     return ConnectionHealth(
         state=state,
@@ -103,6 +120,7 @@ def _resolve(
     has_active_job: bool,
     cache_as_of: datetime | None,
     moment: datetime,
+    stale_after_minutes: int,
 ) -> tuple[ConnectionState, ConnectionAction]:
     if connection.lifecycle_status != "active":
         return "disconnected", "none"
@@ -124,14 +142,14 @@ def _resolve(
     if cache_as_of is None:
         return "stale", "sync"
 
-    if moment - cache_as_of > timedelta(minutes=STALE_AFTER_MINUTES):
+    if moment - cache_as_of > timedelta(minutes=stale_after_minutes):
         return "stale", "sync"
 
     return "ready", "none"
 
 
 __all__ = [
-    "STALE_AFTER_MINUTES",
+    "DISPLAY_STALE_AFTER_MINUTES",
     "ConnectionAction",
     "ConnectionHealth",
     "ConnectionState",

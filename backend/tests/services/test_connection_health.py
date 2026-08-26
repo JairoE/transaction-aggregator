@@ -129,16 +129,48 @@ def test_reconnect_clears_the_error_and_returns_to_syncing() -> None:
     assert ready.state == "ready"
 
 
-def test_cache_older_than_an_hour_is_stale() -> None:
+def test_cache_within_the_recovery_window_stays_ready() -> None:
+    """90 minutes is past the 60-minute *enqueue* threshold but well inside the
+    display window, so scheduled sync is still expected to catch it. Warning
+    here is what made the notice fire on healthy connections every cycle."""
+
     health = classify_connection_health(
-        _connection(last_successful_sync_at=NOW - timedelta(minutes=61)),
+        _connection(last_successful_sync_at=NOW - timedelta(minutes=90)),
+        has_active_job=False,
+        now=NOW,
+    )
+
+    assert health.state == "ready"
+    assert health.action == "none"
+
+
+def test_cache_past_the_display_window_is_stale() -> None:
+    health = classify_connection_health(
+        _connection(last_successful_sync_at=NOW - timedelta(hours=3)),
         has_active_job=False,
         now=NOW,
     )
 
     assert health.state == "stale"
     assert health.action == "sync"
-    assert health.cache_as_of == NOW - timedelta(minutes=61)
+    assert health.cache_as_of == NOW - timedelta(hours=3)
+
+
+def test_explicit_threshold_overrides_the_default() -> None:
+    aged = _connection(last_successful_sync_at=NOW - timedelta(minutes=90))
+
+    assert (
+        classify_connection_health(
+            aged, has_active_job=False, now=NOW, stale_after_minutes=45
+        ).state
+        == "stale"
+    )
+    assert (
+        classify_connection_health(
+            aged, has_active_job=False, now=NOW, stale_after_minutes=600
+        ).state
+        == "ready"
+    )
 
 
 def test_never_synced_connection_is_stale() -> None:

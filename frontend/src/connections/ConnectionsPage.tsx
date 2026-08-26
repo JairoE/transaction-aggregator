@@ -11,16 +11,29 @@ type ConnectionsResponse = components['schemas']['ConnectionsResponse']
 
 export const CONNECTIONS_QUERY_KEY = ['connections'] as const
 
+/**
+ * Shared by this page and `DashboardPage`, which read the same key. The poll
+ * exists because connection health changes on the server's schedule, not the
+ * user's: the background sync worker can clear a `stale` bank while the page
+ * just sits there, and without this the warning would linger until a manual
+ * reload. Paused while the tab is hidden so an idle background tab isn't
+ * polling `/api/connections` all day.
+ */
+export const connectionsQueryOptions = {
+  queryKey: CONNECTIONS_QUERY_KEY,
+  queryFn: () => apiClient.request<ConnectionsResponse>('/api/connections'),
+  refetchInterval: 60_000,
+  refetchOnWindowFocus: true,
+  refetchIntervalInBackground: false,
+} as const
+
 export function ConnectionsPage() {
   const { owner } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const [announcement, setAnnouncement] = useState('')
 
-  const connectionsQuery = useQuery({
-    queryKey: CONNECTIONS_QUERY_KEY,
-    queryFn: () => apiClient.request<ConnectionsResponse>('/api/connections'),
-  })
+  const connectionsQuery = useQuery(connectionsQueryOptions)
 
   const handleChanged = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY })
