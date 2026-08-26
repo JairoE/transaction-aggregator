@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { act, screen, within } from '@testing-library/react'
+import { act, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import type { PlaidLinkOnSuccess, PlaidLinkOptionsWithLinkToken } from 'react-plaid-link'
@@ -470,6 +470,72 @@ describe('bank connections', () => {
         }
       }
     })
+  })
+
+  it('clears a stale notice on its own when a background sync repairs the bank', async () => {
+    // The sync worker can clear `stale` on the server's schedule while this
+    // page just sits open. Without the poll on `connectionsQueryOptions` the
+    // warning would linger until the user reloaded — which is what made the
+    // notice look permanent.
+    let responses = 0
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/connections', () => {
+        responses += 1
+        return HttpResponse.json(
+          makeConnectionsResponse([
+            responses === 1
+              ? {
+                  bank: 'capital-one',
+                  connected: true,
+                  connection_id: 'conn-1',
+                  card_count: 2,
+                  state: 'stale',
+                  action: 'sync',
+                  message: 'Showing cached transactions. Sync to check for new activity.',
+                  cache_as_of: '2026-08-21T11:46:00Z',
+                }
+              : {
+                  bank: 'capital-one',
+                  connected: true,
+                  connection_id: 'conn-1',
+                  card_count: 2,
+                  state: 'ready',
+                  action: 'none',
+                  message: 'Up to date.',
+                  cache_as_of: '2026-08-21T14:10:00Z',
+                },
+          ]),
+        )
+      }),
+    )
+
+    // Installed before render so the query's own refetch timer is a fake one.
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderAppAt('/connections')
+      await screen.findByRole('heading', { name: /connect your credit cards/i })
+      expect(
+        await within(findCard('Capital One')).findByRole('button', { name: /sync now/i }),
+      ).toBeInTheDocument()
+
+      // Advance past the 60s refetch interval: no reload, no user action.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(61_000)
+      })
+
+      await waitFor(() => {
+        expect(
+          within(findCard('Capital One')).queryByRole('button', { name: /sync now/i }),
+        ).toBeNull()
+      })
+      expect(responses).toBeGreaterThan(1)
+      expect(
+        within(findCard('Capital One')).getByText('2 credit cards loaded'),
+      ).toBeInTheDocument()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   describe('describeStatus', () => {

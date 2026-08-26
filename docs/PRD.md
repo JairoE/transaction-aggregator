@@ -157,6 +157,7 @@ The Trial plan allows at most 10 production Items. An Item represents one end-us
 - **FR-SYNC-011:** A manual Sync action shall deduplicate against an already queued or running job for the same Item.
 - **FR-SYNC-012:** Manual provider refresh shall be best-effort, rate-limited per Item, and disabled after Plaid reports that the capability is unsupported.
 - **FR-SYNC-013:** The UI shall distinguish local sync completion from Plaid's last successful provider update.
+- **FR-SYNC-014a:** The owner-facing stale indicator shall use a longer window than the enqueue threshold, so a connection that scheduled synchronization is still expected to recover shall not be surfaced as needing attention.
 - **FR-SYNC-014:** Initial history loading shall show recent data as it becomes available and continue historical backfill without blanking the dashboard.
 
 ### 8.4 Search

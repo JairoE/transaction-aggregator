@@ -137,6 +137,7 @@ class ConnectionService:
                 classify_connection_health(
                     connection,
                     has_active_job=connection.id in active_job_connection_ids,
+                    stale_after_minutes=self._settings.stale_display_minutes,
                 )
                 if connection is not None
                 else None

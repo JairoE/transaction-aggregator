@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { apiClient } from '../api/client'
-import type { components } from '../api/generated'
 import { useAuth } from '../auth/AuthProvider'
-import { CONNECTIONS_QUERY_KEY } from '../connections/ConnectionsPage'
+import { connectionsQueryOptions } from '../connections/ConnectionsPage'
 import { AppShell } from '../shell/AppShell'
 import { DotIcon } from '../shell/icons'
 import { useOnlineStatus } from '../shell/useOnlineStatus'
@@ -20,8 +18,6 @@ import {
   fetchTransactionLimitAlerts,
   TRANSACTION_LIMIT_ALERTS_QUERY_KEY,
 } from '../limitations/api'
-
-type ConnectionsResponse = components['schemas']['ConnectionsResponse']
 
 interface CardPageState {
   /** Transactions appended by "Load more" clicks, beyond the base page. */
@@ -40,10 +36,7 @@ export function DashboardPage() {
   // Connection health for `CacheStatusBanner`. Shares its query key with
   // `ConnectionsPage` so navigating between the two screens doesn't
   // duplicate the request.
-  const connectionsQuery = useQuery({
-    queryKey: CONNECTIONS_QUERY_KEY,
-    queryFn: () => apiClient.request<ConnectionsResponse>('/api/connections'),
-  })
+  const connectionsQuery = useQuery(connectionsQueryOptions)
 
   const searchQuery = useQuery({
     queryKey: ['transactions', 'search', submittedQuery] as const,

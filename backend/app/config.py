@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     plaid_institution_overrides: str | None = None
     trusted_hosts: str = "127.0.0.1,localhost"
     sync_interval_minutes: int = 60
+    display_stale_after_minutes: int | None = None
     enable_background_worker: bool = True
 
     @model_validator(mode="after")
@@ -51,6 +52,22 @@ class Settings(BaseSettings):
             if host in {"127.0.0.1", "localhost", "::1"}:
                 raise ValueError("production public_base_url must not be loopback")
         return self
+
+    @property
+    def stale_display_minutes(self) -> int:
+        """How old a cache may get before the owner is warned about it.
+
+        Deliberately longer than `sync_interval_minutes`, which is the
+        *enqueue* threshold (FR-SYNC-007/008). The scheduler ticks on its own
+        clock while a connection ages on its own, so equal thresholds would
+        flag healthy connections for up to a full sweep every cycle. Warning
+        only after two missed sweeps plus grace means `stale` reports that
+        automatic recovery has actually failed, not that an hour has passed.
+        """
+
+        if self.display_stale_after_minutes is not None:
+            return self.display_stale_after_minutes
+        return self.sync_interval_minutes * 2 + 30
 
     @property
     def oauth_redirect_uri(self) -> str:
