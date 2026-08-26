@@ -173,10 +173,18 @@ export async function startPreviewEnvironment({
   }
 
   try {
+    // `cwd` must be BACKEND_ROOT, not dataDir: `python -m app.cli` and
+    // uvicorn's `app.main:create_app` import string both resolve `app`
+    // relative to the process's working directory, and dataDir is a scratch
+    // temp dir holding only the SQLite file, not the `app` package. The
+    // migration step is the exception — Alembic's own `prepend_sys_path`
+    // config option (set to BACKEND_ROOT above) inserts it onto `sys.path`
+    // itself, so it would still resolve `app` correctly either way; using
+    // BACKEND_ROOT here too keeps all three invocations consistent.
     execFileSync(
       'uv',
       ['run', '--project', BACKEND_ROOT, 'python', '-c', MIGRATION_SCRIPT],
-      { cwd: dataDir, env: configuration.env, stdio },
+      { cwd: BACKEND_ROOT, env: configuration.env, stdio },
     )
     execFileSync(
       'uv',
@@ -185,7 +193,7 @@ export async function startPreviewEnvironment({
         'create-owner', '--email', ownerEmail, '--password-stdin',
       ],
       {
-        cwd: dataDir,
+        cwd: BACKEND_ROOT,
         env: configuration.env,
         input: `${ownerPassword}\n`,
         stdio: ['pipe', stdio, stdio],
@@ -198,7 +206,7 @@ export async function startPreviewEnvironment({
         'run', '--project', BACKEND_ROOT, 'uvicorn', '--factory',
         'app.main:create_app', '--host', '127.0.0.1', '--port', String(selectedPort),
       ],
-      { cwd: dataDir, env: configuration.env, stdio },
+      { cwd: BACKEND_ROOT, env: configuration.env, stdio },
     )
     await waitForHealth(configuration.localUrl, server)
   } catch (error) {
