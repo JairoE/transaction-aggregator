@@ -28,7 +28,7 @@ function TransactionRow({ cardId, transaction, query }: {
   const normalizedOriginal = transaction.original_description?.trim().toLowerCase()
   const showOriginalDescription =
     hasQuery && !!transaction.original_description && normalizedOriginal !== merchantLabel.trim().toLowerCase()
-  const dateValue = transaction.authorized_date ?? transaction.posted_date
+  const dateValue = transaction.posted_date ?? transaction.authorized_date
 
   return (
     <div className="transaction-row">
