@@ -1,6 +1,14 @@
 import { execFileSync, spawn } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
-import { mkdtempSync, rmSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
@@ -10,6 +18,9 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BACKEND_ROOT = join(REPO_ROOT, 'backend')
 const DEFAULT_PORT = 8000
 const STARTUP_TIMEOUT_MS = 30_000
+const PREVIEW_DIR_PREFIX = 'ta-preview-'
+const PREVIEW_PID_FILENAME = 'preview.pid'
+const ORPHAN_MAX_AGE_MS = 10 * 60 * 1000
 
 const MIGRATION_SCRIPT = `
 from alembic import command
@@ -137,6 +148,56 @@ async function waitForExit(server, timeoutMs) {
   })
 }
 
+function isProcessAlive(pid) {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
+
+// Best-effort reclamation of `ta-preview-*` directories left behind by a
+// previous run that was killed ungracefully (SIGKILL, OOM, a force-quit
+// terminal). A graceful SIGINT/SIGTERM is already handled by `stop()`
+// below; this only exists to catch what that path can never see, since
+// SIGKILL cannot be caught by any process.
+function sweepOrphanedPreviewDirs() {
+  const root = tmpdir()
+  let entries
+  try {
+    entries = readdirSync(root, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory() || !entry.name.startsWith(PREVIEW_DIR_PREFIX)) continue
+    const dirPath = join(root, entry.name)
+    const pidPath = join(dirPath, PREVIEW_PID_FILENAME)
+
+    let orphaned
+    if (existsSync(pidPath)) {
+      const pid = Number.parseInt(readFileSync(pidPath, 'utf8'), 10)
+      orphaned = !Number.isInteger(pid) || !isProcessAlive(pid)
+    } else {
+      // No pidfile means the owner died before it ever spawned a server
+      // (or is still starting up and hasn't reached that point yet). Only
+      // reclaim once it's older than any legitimate startup could take,
+      // so we never race a genuinely concurrent preview mid-startup.
+      let stats
+      try {
+        stats = statSync(dirPath)
+      } catch {
+        continue
+      }
+      orphaned = Date.now() - stats.mtimeMs > ORPHAN_MAX_AGE_MS
+    }
+
+    if (orphaned) rmSync(dirPath, { recursive: true, force: true })
+  }
+}
+
 export async function startPreviewEnvironment({
   port,
   publicBaseUrl,
@@ -144,8 +205,14 @@ export async function startPreviewEnvironment({
   ownerPassword,
   stdio = 'inherit',
 } = {}) {
+  try {
+    sweepOrphanedPreviewDirs()
+  } catch {
+    // Cleanup is best-effort and must never block starting a new preview.
+  }
+
   const selectedPort = await selectPort(port)
-  const dataDir = mkdtempSync(join(tmpdir(), 'ta-preview-'))
+  const dataDir = mkdtempSync(join(tmpdir(), PREVIEW_DIR_PREFIX))
   const dbPath = join(dataDir, 'preview.db')
   const configuration = buildPreviewEnvironment({
     port: selectedPort,
@@ -173,10 +240,18 @@ export async function startPreviewEnvironment({
   }
 
   try {
+    // `cwd` must be BACKEND_ROOT, not dataDir: `python -m app.cli` and
+    // uvicorn's `app.main:create_app` import string both resolve `app`
+    // relative to the process's working directory, and dataDir is a scratch
+    // temp dir holding only the SQLite file, not the `app` package. The
+    // migration step is the exception — Alembic's own `prepend_sys_path`
+    // config option (set to BACKEND_ROOT above) inserts it onto `sys.path`
+    // itself, so it would still resolve `app` correctly either way; using
+    // BACKEND_ROOT here too keeps all three invocations consistent.
     execFileSync(
       'uv',
       ['run', '--project', BACKEND_ROOT, 'python', '-c', MIGRATION_SCRIPT],
-      { cwd: dataDir, env: configuration.env, stdio },
+      { cwd: BACKEND_ROOT, env: configuration.env, stdio },
     )
     execFileSync(
       'uv',
@@ -185,7 +260,7 @@ export async function startPreviewEnvironment({
         'create-owner', '--email', ownerEmail, '--password-stdin',
       ],
       {
-        cwd: dataDir,
+        cwd: BACKEND_ROOT,
         env: configuration.env,
         input: `${ownerPassword}\n`,
         stdio: ['pipe', stdio, stdio],
@@ -198,8 +273,11 @@ export async function startPreviewEnvironment({
         'run', '--project', BACKEND_ROOT, 'uvicorn', '--factory',
         'app.main:create_app', '--host', '127.0.0.1', '--port', String(selectedPort),
       ],
-      { cwd: dataDir, env: configuration.env, stdio },
+      { cwd: BACKEND_ROOT, env: configuration.env, stdio },
     )
+    // Lets a future sweep confirm this preview's owner is really dead
+    // before reclaiming its directory.
+    writeFileSync(join(dataDir, PREVIEW_PID_FILENAME), String(server.pid))
     await waitForHealth(configuration.localUrl, server)
   } catch (error) {
     await stop()
