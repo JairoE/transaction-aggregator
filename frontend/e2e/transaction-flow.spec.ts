@@ -181,7 +181,9 @@ test('owner connects four banks and searches every card at once', async ({ page 
 
   // Every authorized credit card gets its own panel.
   for (const mask of EXPECTED_MASKS) {
-    await expect(page.getByText(`··${mask}`)).toBeVisible()
+    await expect(
+      page.getByRole('img', { name: new RegExp(`card ending in ${mask}$`, 'i') }),
+    ).toBeVisible()
   }
 
   // Typing alone must not search.
@@ -196,7 +198,9 @@ test('owner connects four banks and searches every card at once', async ({ page 
 
   // Every card stays in the grid, each reporting its own count.
   for (const mask of EXPECTED_MASKS) {
-    await expect(page.getByText(`··${mask}`)).toBeVisible()
+    await expect(
+      page.getByRole('img', { name: new RegExp(`card ending in ${mask}$`, 'i') }),
+    ).toBeVisible()
   }
   await expect(page.getByText(/^Paze · Urban Market$/)).toBeVisible()
 

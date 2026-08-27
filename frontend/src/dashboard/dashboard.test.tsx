@@ -41,6 +41,23 @@ describe('dashboard card grid', () => {
     }
   })
 
+  it('renders a bank-specific outlined preview with the visible identity of every card', async () => {
+    server.use(searchHandler(() => recentSearchResponse()))
+    await renderDashboard()
+
+    for (const card of DASHBOARD_CARDS) {
+      const region = regionFor(card.mask ?? '')
+      const preview = within(region).getByRole('img', {
+        name: `${card.name}, issued by ${card.bank_display_name}, card ending in ${card.mask}`,
+      })
+
+      expect(preview).toHaveClass(`credit-card-outline--${card.bank}`)
+      expect(preview).toHaveTextContent(card.bank_display_name)
+      expect(preview).toHaveTextContent(card.name)
+      expect(preview).toHaveTextContent(`•••• ${card.mask}`)
+    }
+  })
+
   it('gives every card a fixed-height, independently scrollable transaction region', async () => {
     server.use(searchHandler(() => recentSearchResponse()))
     await renderDashboard()

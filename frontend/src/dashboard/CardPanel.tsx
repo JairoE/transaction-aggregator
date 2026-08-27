@@ -2,6 +2,7 @@ import { TransactionList } from './TransactionList'
 import { useSearchQuery } from './SearchContext'
 import type { DashboardCardGroup } from './CardGrid'
 import { TransactionLimitAlerts } from './TransactionLimitAlerts'
+import { CreditCardOutline } from './CreditCardOutline'
 
 const TRANSACTION_VIEWPORT_HEIGHT = 260
 
@@ -33,9 +34,12 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
           {hasQuery ? `${matchCount} ${matchCount === 1 ? 'match' : 'matches'}` : 'Synced'}
         </span>
       </header>
-      <p className="card-panel__identity">
-        {card.name} ··{card.mask ?? '----'}
-      </p>
+      <CreditCardOutline
+        bank={card.bank}
+        bankDisplayName={card.bank_display_name}
+        cardName={card.name}
+        mask={card.mask}
+      />
 
       <TransactionLimitAlerts alerts={limitationAlerts} />
 
