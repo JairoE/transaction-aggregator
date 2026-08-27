@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import test from 'node:test'
 
 import {
@@ -86,6 +88,38 @@ test('preview starts without repository env or data and removes its temporary da
   }
 
   assert.equal(existsSync(preview.dataDir), false)
+})
+
+test('preview sweep removes only directories with a dead owner, leaving live or fresh ones alone', async () => {
+  // A guaranteed-dead pid, obtained deterministically (no sleeps/timing):
+  // spawn a trivial child and await its own exit before reusing its pid.
+  const deadChild = spawn(process.execPath, ['-e', 'process.exit(0)'])
+  await new Promise((resolveExit) => deadChild.once('exit', resolveExit))
+
+  const deadOwnerDir = mkdtempSync(join(tmpdir(), 'ta-preview-'))
+  writeFileSync(join(deadOwnerDir, 'preview.pid'), String(deadChild.pid))
+
+  const liveOwnerDir = mkdtempSync(join(tmpdir(), 'ta-preview-'))
+  writeFileSync(join(liveOwnerDir, 'preview.pid'), String(process.pid))
+
+  const freshDir = mkdtempSync(join(tmpdir(), 'ta-preview-'))
+
+  const preview = await startPreviewEnvironment({
+    port: 0,
+    ownerEmail: 'preview-sweep-test@example.com',
+    ownerPassword: 'preview-test-password-2026',
+    stdio: 'ignore',
+  })
+
+  try {
+    assert.equal(existsSync(deadOwnerDir), false)
+    assert.equal(existsSync(liveOwnerDir), true)
+    assert.equal(existsSync(freshDir), true)
+  } finally {
+    await preview.stop()
+    rmSync(liveOwnerDir, { recursive: true, force: true })
+    rmSync(freshDir, { recursive: true, force: true })
+  }
 })
 
 test('preview command exits successfully after a termination signal', async (t) => {
