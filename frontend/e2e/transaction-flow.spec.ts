@@ -179,6 +179,22 @@ test('owner connects four banks and searches every card at once', async ({ page 
   await page.getByRole('button', { name: 'View cards' }).click()
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
 
+  const panelSurface = await page.locator('.card-panel').first().evaluate((panel) => {
+    const styles = getComputedStyle(panel)
+    return {
+      backgroundColor: styles.backgroundColor,
+      borderTopWidth: styles.borderTopWidth,
+      borderRadius: styles.borderRadius,
+      boxShadow: styles.boxShadow,
+    }
+  })
+  expect(panelSurface).toEqual({
+    backgroundColor: 'rgb(245, 245, 247)',
+    borderTopWidth: '0px',
+    borderRadius: '8px',
+    boxShadow: 'none',
+  })
+
   // Every authorized credit card gets its own panel.
   for (const mask of EXPECTED_MASKS) {
     await expect(
@@ -221,6 +237,46 @@ test('owner connects four banks and searches every card at once', async ({ page 
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
 
   errors.assertClean()
+})
+
+test('every outlined card keeps its small accent label at AA contrast', async ({ page }) => {
+  await signIn(page)
+  for (const bank of BANKS) {
+    await connectBank(page, bank)
+  }
+  await page.goto('/dashboard')
+  await expect(page.getByRole('img', { name: /card ending in/i }).first()).toBeVisible()
+
+  const contrastByBank = await page.locator('.credit-card-outline').evaluateAll((cards) => {
+    const parseRgb = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? []
+      return [channels[0] ?? 0, channels[1] ?? 0, channels[2] ?? 0]
+    }
+    const luminance = ([red, green, blue]: number[]) => {
+      const linear = [red, green, blue].map((channel) => {
+        const value = channel / 255
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    return cards.map((card) => {
+      const label = card.querySelector<HTMLElement>('.credit-card-outline__type')
+      if (!label) return { bank: card.className, ratio: 0 }
+
+      const foreground = luminance(parseRgb(getComputedStyle(label).color))
+      const background = luminance(parseRgb(getComputedStyle(card).backgroundColor))
+      return {
+        bank: card.className,
+        ratio: (Math.max(foreground, background) + 0.05) /
+          (Math.min(foreground, background) + 0.05),
+      }
+    })
+  })
+
+  for (const result of contrastByBank) {
+    expect(result.ratio, `${result.bank} accent-label contrast`).toBeGreaterThanOrEqual(4.5)
+  }
 })
 
 test('no Plaid secret or access token reaches the browser', async ({ page }) => {

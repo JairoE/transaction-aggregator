@@ -31,13 +31,14 @@ export function CreditCardOutline({
   mask,
 }: CreditCardOutlineProps) {
   const lastFour = mask ?? '----'
+  const numberDescription = mask ? `card ending in ${mask}` : 'card number unavailable'
   const bankMeta = BANKS_BY_SLUG[bank]
 
   return (
     <div
       className={`credit-card-outline credit-card-outline--${bank}`}
       role="img"
-      aria-label={`${cardName}, issued by ${bankDisplayName}, card ending in ${lastFour}`}
+      aria-label={`${cardName}, issued by ${bankDisplayName}, ${numberDescription}`}
     >
       <div className="credit-card-outline__topline">
         <span className="credit-card-outline__issuer">{bankDisplayName}</span>

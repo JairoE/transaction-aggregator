@@ -58,6 +58,27 @@ describe('dashboard card grid', () => {
     }
   })
 
+  it('announces an unavailable card number without reading the visual placeholder', async () => {
+    server.use(
+      searchHandler(() => {
+        const response = recentSearchResponse()
+        response.groups[0].card = { ...response.groups[0].card, mask: null }
+        return response
+      }),
+    )
+    await renderDashboard()
+
+    const card = DASHBOARD_CARDS[0]
+    const region = screen.getByRole('region', {
+      name: `${card.bank_display_name} card ending in unknown`,
+    })
+    const preview = within(region).getByRole('img', {
+      name: `${card.name}, issued by ${card.bank_display_name}, card number unavailable`,
+    })
+
+    expect(preview).toHaveTextContent('•••• ----')
+  })
+
   it('gives every card a fixed-height, independently scrollable transaction region', async () => {
     server.use(searchHandler(() => recentSearchResponse()))
     await renderDashboard()

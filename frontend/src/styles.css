@@ -1125,13 +1125,11 @@ input:focus-visible {
 
 .card-panel {
   min-height: 360px;
-  background: var(--color-surface-strong);
-  border: 1px solid var(--color-border);
-  border-radius: 14px;
+  background: var(--color-surface);
+  border-radius: var(--radius);
   padding: 1.1rem;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 10px 30px rgba(20, 34, 59, 0.05);
 }
 
 .card-panel__header {
@@ -1207,7 +1205,7 @@ input:focus-visible {
 
 .credit-card-outline--chase {
   --card-ink: #0b4f9c;
-  --card-accent: #2a85c7;
+  --card-accent: #1b6fa8;
   --card-surface: #f4f9fd;
 }
 
