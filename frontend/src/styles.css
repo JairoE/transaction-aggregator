@@ -180,6 +180,12 @@ input:focus-visible {
   color: var(--color-shell);
 }
 
+.app-header__logout-error {
+  color: var(--color-danger);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
 .status-pill {
   display: inline-flex;
   align-items: center;
