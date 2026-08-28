@@ -4,7 +4,7 @@ import type { components } from '../api/generated'
 import { CheckIcon, DotIcon, ExternalLinkIcon, WarningIcon } from '../shell/icons'
 import { useOnlineStatus } from '../shell/useOnlineStatus'
 import { BANKS_BY_SLUG } from './banks'
-import { ConnectionNotice, toConnectionAction, toConnectionState } from './ConnectionNotice'
+import { ConnectionNotice, toConnectionAction } from './ConnectionNotice'
 import { DemoBankDialog } from './DemoBankDialog'
 import { continuationExpiry, clearLinkContinuation, saveLinkContinuation } from './linkContinuation'
 import { PlaidLinkLauncher } from './PlaidLinkLauncher'
@@ -44,7 +44,6 @@ export function BankConnectionCard({
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const previouslyFocused = useRef<HTMLElement | null>(null)
   const isOnline = useOnlineStatus()
-  const connectionState = toConnectionState(bank.state)
   const connectionAction = toConnectionAction(bank.action)
 
   const restoreFocus = useCallback(() => {
@@ -140,21 +139,6 @@ export function BankConnectionCard({
       })
     }
   }, [bank.connection_id, onChanged, restoreFocus])
-
-  // While the backend classifies this connection as actively syncing, keep
-  // polling the connections list so the card observes the follow-on
-  // transition to `ready` (or back to a failure state) instead of getting
-  // stuck showing "syncing" forever once the one `onChanged()` from
-  // `triggerSync` has already fired.
-  useEffect(() => {
-    if (connectionState !== 'syncing') {
-      return
-    }
-    const timer = window.setInterval(() => {
-      onChanged()
-    }, 400)
-    return () => window.clearInterval(timer)
-  }, [connectionState, onChanged])
 
   function handleConnectClick() {
     void requestLinkToken('new', false)
