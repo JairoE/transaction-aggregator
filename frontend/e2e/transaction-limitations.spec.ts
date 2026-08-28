@@ -21,6 +21,51 @@ async function expectResponsiveBreakpoints(page: Page): Promise<void> {
   }
 }
 
+async function expectMinimumTextContrast(page: Page, selector: string): Promise<void> {
+  const contrast = await page.locator(selector).first().evaluate((element) => {
+    type Rgba = [number, number, number, number]
+
+    const parseColor = (value: string): Rgba => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? []
+      return [channels[0] ?? 0, channels[1] ?? 0, channels[2] ?? 0, channels[3] ?? 1]
+    }
+    const composite = (front: Rgba, back: Rgba): Rgba => {
+      const alpha = front[3] + back[3] * (1 - front[3])
+      if (alpha === 0) return [0, 0, 0, 0]
+      return [
+        (front[0] * front[3] + back[0] * back[3] * (1 - front[3])) / alpha,
+        (front[1] * front[3] + back[1] * back[3] * (1 - front[3])) / alpha,
+        (front[2] * front[3] + back[2] * back[3] * (1 - front[3])) / alpha,
+        alpha,
+      ]
+    }
+    const luminance = ([red, green, blue]: Rgba) => {
+      const linear = [red, green, blue].map((channel) => {
+        const value = channel / 255
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    let background: Rgba = [0, 0, 0, 0]
+    let current: Element | null = element
+    while (current) {
+      background = composite(background, parseColor(getComputedStyle(current).backgroundColor))
+      current = current.parentElement
+    }
+    background = composite(background, [255, 255, 255, 1])
+    const foreground = composite(parseColor(getComputedStyle(element).color), background)
+    const foregroundLuminance = luminance(foreground)
+    const backgroundLuminance = luminance(background)
+    return (
+      (Math.max(foregroundLuminance, backgroundLuminance) + 0.05) /
+      (Math.min(foregroundLuminance, backgroundLuminance) + 0.05)
+    )
+  })
+
+  expect(contrast, `${selector} text contrast`).toBeGreaterThanOrEqual(4.5)
+}
+
 async function signIn(page: Page): Promise<void> {
   await page.goto('/')
   await page.getByLabel('Email').fill(OWNER_EMAIL)
@@ -50,6 +95,10 @@ test('owner signs in, views transactions, creates and views an alert, then signs
   await signIn(page)
   await connectAll(page)
 
+  await expectMinimumTextContrast(page, '.app-header__link')
+  await expectMinimumTextContrast(page, '.eyebrow')
+  await expectMinimumTextContrast(page, '.status-chip')
+
   await page.getByRole('button', { name: 'View cards' }).click()
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
 
@@ -58,6 +107,7 @@ test('owner signs in, views transactions, creates and views an alert, then signs
     hasText: 'Paze · Urban Market',
   }).first()
   await expect(transaction).toContainText('$64.18')
+  await expectMinimumTextContrast(page, '.transaction-row__alert-link')
   await expectNoHorizontalOverflow(page)
   await transaction.getByRole('link', { name: 'Set alert for Paze · Urban Market' }).focus()
   await page.keyboard.press('Enter')
