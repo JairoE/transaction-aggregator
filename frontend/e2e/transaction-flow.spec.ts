@@ -70,10 +70,40 @@ async function connectBank(page: Page, bank: string): Promise<void> {
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > window.innerWidth,
-  )
-  expect(overflow, 'page must not scroll horizontally').toBe(false)
+  const escapedElements = await page.locator('html, body, body *').evaluateAll((elements) => {
+    const viewportWidth = window.innerWidth
+
+    return elements.flatMap((element) => {
+      const htmlElement = element as HTMLElement
+      const styles = getComputedStyle(htmlElement)
+      const bounds = htmlElement.getBoundingClientRect()
+      const isRendered =
+        styles.display !== 'none' &&
+        styles.visibility !== 'hidden' &&
+        Number(styles.opacity) !== 0 &&
+        bounds.width > 0 &&
+        bounds.height > 0
+      const isScreenReaderOnly = htmlElement.closest('.sr-only') !== null
+
+      if (
+        !isRendered ||
+        isScreenReaderOnly ||
+        (bounds.left >= -0.5 && bounds.right <= viewportWidth + 0.5)
+      ) {
+        return []
+      }
+
+      const selector = htmlElement.id
+        ? `${htmlElement.tagName.toLowerCase()}#${htmlElement.id}`
+        : `${htmlElement.tagName.toLowerCase()}${Array.from(htmlElement.classList)
+            .map((className) => `.${className}`)
+            .join('')}`
+
+      return [{ selector, left: bounds.left, right: bounds.right, viewportWidth }]
+    })
+  })
+
+  expect(escapedElements, 'visible elements must stay within the device width').toEqual([])
 }
 
 test('setup journey is a left rail on desktop and a compact row on mobile', async ({ page }) => {
@@ -237,6 +267,18 @@ test('owner connects four banks and searches every card at once', async ({ page 
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
 
   errors.assertClean()
+})
+
+test('dashboard keeps every visible element inside a narrow mobile device', async ({ page }) => {
+  await page.setViewportSize({ width: 280, height: 653 })
+  await signIn(page)
+  for (const bank of BANKS) {
+    await connectBank(page, bank)
+  }
+  await page.goto('/dashboard')
+  await expect(page.getByRole('img', { name: /card ending in/i }).first()).toBeVisible()
+
+  await expectNoHorizontalOverflow(page)
 })
 
 test('every outlined card keeps its small accent label at AA contrast', async ({ page }) => {
