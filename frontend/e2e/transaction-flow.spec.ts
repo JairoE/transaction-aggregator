@@ -70,10 +70,40 @@ async function connectBank(page: Page, bank: string): Promise<void> {
 }
 
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth > window.innerWidth,
-  )
-  expect(overflow, 'page must not scroll horizontally').toBe(false)
+  const escapedElements = await page.locator('html, body, body *').evaluateAll((elements) => {
+    const viewportWidth = window.innerWidth
+
+    return elements.flatMap((element) => {
+      const htmlElement = element as HTMLElement
+      const styles = getComputedStyle(htmlElement)
+      const bounds = htmlElement.getBoundingClientRect()
+      const isRendered =
+        styles.display !== 'none' &&
+        styles.visibility !== 'hidden' &&
+        Number(styles.opacity) !== 0 &&
+        bounds.width > 0 &&
+        bounds.height > 0
+      const isScreenReaderOnly = htmlElement.closest('.sr-only') !== null
+
+      if (
+        !isRendered ||
+        isScreenReaderOnly ||
+        (bounds.left >= -0.5 && bounds.right <= viewportWidth + 0.5)
+      ) {
+        return []
+      }
+
+      const selector = htmlElement.id
+        ? `${htmlElement.tagName.toLowerCase()}#${htmlElement.id}`
+        : `${htmlElement.tagName.toLowerCase()}${Array.from(htmlElement.classList)
+            .map((className) => `.${className}`)
+            .join('')}`
+
+      return [{ selector, left: bounds.left, right: bounds.right, viewportWidth }]
+    })
+  })
+
+  expect(escapedElements, 'visible elements must stay within the device width').toEqual([])
 }
 
 test('setup journey is a left rail on desktop and a compact row on mobile', async ({ page }) => {
@@ -179,9 +209,27 @@ test('owner connects four banks and searches every card at once', async ({ page 
   await page.getByRole('button', { name: 'View cards' }).click()
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
 
+  const panelSurface = await page.locator('.card-panel').first().evaluate((panel) => {
+    const styles = getComputedStyle(panel)
+    return {
+      backgroundColor: styles.backgroundColor,
+      borderTopWidth: styles.borderTopWidth,
+      borderRadius: styles.borderRadius,
+      boxShadow: styles.boxShadow,
+    }
+  })
+  expect(panelSurface).toEqual({
+    backgroundColor: 'rgb(245, 245, 247)',
+    borderTopWidth: '0px',
+    borderRadius: '8px',
+    boxShadow: 'none',
+  })
+
   // Every authorized credit card gets its own panel.
   for (const mask of EXPECTED_MASKS) {
-    await expect(page.getByText(`··${mask}`)).toBeVisible()
+    await expect(
+      page.getByRole('img', { name: new RegExp(`card ending in ${mask}$`, 'i') }),
+    ).toBeVisible()
   }
 
   // Typing alone must not search.
@@ -196,7 +244,9 @@ test('owner connects four banks and searches every card at once', async ({ page 
 
   // Every card stays in the grid, each reporting its own count.
   for (const mask of EXPECTED_MASKS) {
-    await expect(page.getByText(`··${mask}`)).toBeVisible()
+    await expect(
+      page.getByRole('img', { name: new RegExp(`card ending in ${mask}$`, 'i') }),
+    ).toBeVisible()
   }
   await expect(page.getByText(/^Paze · Urban Market$/)).toBeVisible()
 
@@ -217,6 +267,58 @@ test('owner connects four banks and searches every card at once', async ({ page 
   await expect(page.getByRole('button', { name: 'Sign in' })).toBeVisible()
 
   errors.assertClean()
+})
+
+test('dashboard keeps every visible element inside a narrow mobile device', async ({ page }) => {
+  await page.setViewportSize({ width: 280, height: 653 })
+  await signIn(page)
+  for (const bank of BANKS) {
+    await connectBank(page, bank)
+  }
+  await page.goto('/dashboard')
+  await expect(page.getByRole('img', { name: /card ending in/i }).first()).toBeVisible()
+
+  await expectNoHorizontalOverflow(page)
+})
+
+test('every outlined card keeps its small accent label at AA contrast', async ({ page }) => {
+  await signIn(page)
+  for (const bank of BANKS) {
+    await connectBank(page, bank)
+  }
+  await page.goto('/dashboard')
+  await expect(page.getByRole('img', { name: /card ending in/i }).first()).toBeVisible()
+
+  const contrastByBank = await page.locator('.credit-card-outline').evaluateAll((cards) => {
+    const parseRgb = (value: string): [number, number, number] => {
+      const channels = value.match(/[\d.]+/g)?.map(Number) ?? []
+      return [channels[0] ?? 0, channels[1] ?? 0, channels[2] ?? 0]
+    }
+    const luminance = ([red, green, blue]: number[]) => {
+      const linear = [red, green, blue].map((channel) => {
+        const value = channel / 255
+        return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4
+      })
+      return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+    }
+
+    return cards.map((card) => {
+      const label = card.querySelector<HTMLElement>('.credit-card-outline__type')
+      if (!label) return { bank: card.className, ratio: 0 }
+
+      const foreground = luminance(parseRgb(getComputedStyle(label).color))
+      const background = luminance(parseRgb(getComputedStyle(card).backgroundColor))
+      return {
+        bank: card.className,
+        ratio: (Math.max(foreground, background) + 0.05) /
+          (Math.min(foreground, background) + 0.05),
+      }
+    })
+  })
+
+  for (const result of contrastByBank) {
+    expect(result.ratio, `${result.bank} accent-label contrast`).toBeGreaterThanOrEqual(4.5)
+  }
 })
 
 test('no Plaid secret or access token reaches the browser', async ({ page }) => {

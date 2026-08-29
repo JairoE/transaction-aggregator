@@ -472,6 +472,45 @@ describe('bank connections', () => {
     })
   })
 
+  it('uses one shared fast poll while multiple banks are syncing', async () => {
+    let responses = 0
+    const syncingBanks = ['capital-one', 'chase', 'citi', 'wells-fargo'] as const
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/connections', () => {
+        responses += 1
+        return HttpResponse.json(
+          makeConnectionsResponse(
+            syncingBanks.map((bank) => ({
+              bank,
+              connected: true,
+              connection_id: `conn-${bank}`,
+              card_count: 2,
+              state: 'syncing',
+              action: 'none',
+              message: 'Refreshing transactions.',
+            })),
+          ),
+        )
+      }),
+    )
+
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      renderAppAt('/connections')
+      await screen.findByRole('heading', { name: /connect your credit cards/i })
+      expect(responses).toBe(1)
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_100)
+      })
+
+      await waitFor(() => expect(responses).toBe(2))
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('clears a stale notice on its own when a background sync repairs the bank', async () => {
     // The sync worker can clear `stale` on the server's schedule while this
     // page just sits open. Without the poll on `connectionsQueryOptions` the

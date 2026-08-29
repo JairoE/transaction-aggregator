@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
 import { CheckIcon, DotIcon } from './icons'
@@ -27,7 +27,20 @@ export interface AppShellProps {
  * rail that keeps the current place visible beside the page content.
  */
 export function AppShell({ currentStep, statusPillText, actionLink, children }: AppShellProps) {
-  const { logout } = useAuth()
+  const { logout, owner } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [logoutError, setLogoutError] = useState<string | null>(null)
+
+  async function handleLogout() {
+    setIsLoggingOut(true)
+    setLogoutError(null)
+    try {
+      await logout()
+    } catch {
+      setLogoutError('We could not sign you out. Try again.')
+      setIsLoggingOut(false)
+    }
+  }
 
   return (
     <div className="app-shell">
@@ -51,9 +64,23 @@ export function AppShell({ currentStep, statusPillText, actionLink, children }: 
               {actionLink.label}
             </Link>
           )}
-          <button type="button" className="app-header__sign-out" onClick={() => void logout()}>
-            Sign out
-          </button>
+          {owner && (
+            <>
+              <button
+                type="button"
+                className="app-header__sign-out"
+                disabled={isLoggingOut}
+                onClick={() => void handleLogout()}
+              >
+                {isLoggingOut ? 'Signing out…' : 'Sign out'}
+              </button>
+              {logoutError && (
+                <span className="app-header__logout-error" role="alert">
+                  {logoutError}
+                </span>
+              )}
+            </>
+          )}
         </div>
       </header>
       <div className="app-shell__layout">

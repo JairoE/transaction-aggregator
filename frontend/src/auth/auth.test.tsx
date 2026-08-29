@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { delay, http, HttpResponse } from 'msw'
 import { server } from '../test/server'
 import { renderAppAt } from '../test/renderApp'
 import { runAxeSmokeTest } from '../test/axe'
@@ -25,6 +26,7 @@ describe('owner sign-in', () => {
     expect(screen.getByRole('textbox', { name: /email/i })).toBeInTheDocument()
     expect(screen.getByLabelText(/password/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /sign in/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /sign out/i })).not.toBeInTheDocument()
   })
 
   it('has no detectable accessibility violations on the sign-in view', async () => {
@@ -115,6 +117,50 @@ describe('owner sign-in', () => {
       await screen.findByRole('heading', { name: /find any credit-card transaction/i }),
     ).toBeInTheDocument()
     expect(window.localStorage.getItem('ta:search-history:owner-1')).toContain('Paze')
+  })
+
+  it('disables sign out while the request is pending', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      connectionsHandler(makeConnectionsResponse()),
+      http.post('/api/auth/logout', async () => {
+        await delay(250)
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/connections')
+    await screen.findByRole('heading', { name: /connect your credit cards/i })
+
+    await user.click(screen.getByRole('button', { name: /sign out/i }))
+
+    expect(screen.getByRole('button', { name: /signing out/i })).toBeDisabled()
+    expect(
+      await screen.findByRole('heading', { name: /find any credit-card transaction/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('announces a sign-out failure and keeps the owner signed in', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      connectionsHandler(makeConnectionsResponse()),
+      http.post('/api/auth/logout', () =>
+        HttpResponse.json(
+          { code: 'LOGOUT_FAILED', message: 'Could not sign out.' },
+          { status: 500 },
+        ),
+      ),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/connections')
+    await screen.findByRole('heading', { name: /connect your credit cards/i })
+
+    await user.click(screen.getByRole('button', { name: /sign out/i }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /we could not sign you out\. try again\./i,
+    )
+    expect(screen.getByRole('button', { name: /sign out/i })).toBeEnabled()
   })
 
   it('prunes expired search phrases when an owner session loads', async () => {

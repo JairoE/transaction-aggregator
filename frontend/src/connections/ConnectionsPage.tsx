@@ -33,7 +33,11 @@ export function ConnectionsPage() {
   const queryClient = useQueryClient()
   const [announcement, setAnnouncement] = useState('')
 
-  const connectionsQuery = useQuery(connectionsQueryOptions)
+  const connectionsQuery = useQuery({
+    ...connectionsQueryOptions,
+    refetchInterval: (query) =>
+      query.state.data?.banks.some((bank) => bank.state === 'syncing') ? 1_000 : 60_000,
+  })
 
   const handleChanged = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: CONNECTIONS_QUERY_KEY })
