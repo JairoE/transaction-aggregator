@@ -213,7 +213,7 @@ class AggregateCursorCodec:
             raise _cursor_invalid() from error
 
         if not isinstance(query, str) or not hmac.compare_digest(
-            query, expected_query
+            query.encode("utf-8"), expected_query.encode("utf-8")
         ):
             raise _cursor_invalid()
         if not isinstance(row_id, str):

@@ -429,7 +429,14 @@ def test_aggregate_cursor_uses_constant_time_comparison_for_query_binding(
     cursor = codec.encode("paze", "2026-09-06", "transaction-id")
 
     assert codec.decode(cursor, "paze") == ("2026-09-06", "transaction-id")
-    assert calls[-1] == ("paze", "paze")
+    assert calls[-1] == (b"paze", b"paze")
+
+
+def test_aggregate_cursor_query_binding_supports_unicode() -> None:
+    codec = AggregateCursorCodec("s" * 32)
+    cursor = codec.encode("café", "2026-09-06", "transaction-id")
+
+    assert codec.decode(cursor, "café") == ("2026-09-06", "transaction-id")
 
 
 async def test_all_transactions_excludes_other_owner_inactive_card_and_removed_connection_rows(
