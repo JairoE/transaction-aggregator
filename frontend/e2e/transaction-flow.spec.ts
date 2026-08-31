@@ -84,10 +84,28 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
         bounds.width > 0 &&
         bounds.height > 0
       const isScreenReaderOnly = htmlElement.closest('.sr-only') !== null
+      const isContainedByHorizontalScroller = (() => {
+        let ancestor = htmlElement.parentElement
+        while (ancestor) {
+          const ancestorStyles = getComputedStyle(ancestor)
+          const ancestorBounds = ancestor.getBoundingClientRect()
+          const clipsHorizontally = /(?:auto|scroll)/.test(ancestorStyles.overflowX)
+          if (
+            clipsHorizontally &&
+            ancestorBounds.left >= -0.5 &&
+            ancestorBounds.right <= viewportWidth + 0.5
+          ) {
+            return true
+          }
+          ancestor = ancestor.parentElement
+        }
+        return false
+      })()
 
       if (
         !isRendered ||
         isScreenReaderOnly ||
+        isContainedByHorizontalScroller ||
         (bounds.left >= -0.5 && bounds.right <= viewportWidth + 0.5)
       ) {
         return []
@@ -232,6 +250,34 @@ test('owner connects four banks and searches every card at once', async ({ page 
     ).toBeVisible()
   }
 
+  // The aggregate view is keyboard-operable and keeps every card's identity
+  // in the semantic seven-column table.
+  const allCardsView = page.getByRole('button', { name: 'All cards' })
+  const allTransactionsView = page.getByRole('button', { name: 'All transactions' })
+  await allCardsView.focus()
+  await page.keyboard.press('Enter')
+  await expect(allCardsView).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Tab')
+  await expect(allTransactionsView).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/dashboard\?view=transactions$/)
+  await expect(allTransactionsView).toHaveAttribute('aria-pressed', 'true')
+
+  const aggregateTable = page.getByRole('table', { name: /transactions across all cards/i })
+  await expect(aggregateTable).toBeVisible()
+  await expect(aggregateTable.getByRole('columnheader')).toHaveCount(7)
+  for (const bank of BANKS) {
+    await expect(aggregateTable).toContainText(bank)
+  }
+  for (const mask of EXPECTED_MASKS) {
+    await expect(aggregateTable).toContainText(`•••• ${mask}`)
+  }
+
+  await allCardsView.focus()
+  await page.keyboard.press('Space')
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(allCardsView).toHaveAttribute('aria-pressed', 'true')
+
   // Typing alone must not search.
   const search = page.getByRole('searchbox', { name: /Search transactions/i })
   await search.fill('Paze')
@@ -249,6 +295,18 @@ test('owner connects four banks and searches every card at once', async ({ page 
     ).toBeVisible()
   }
   await expect(page.getByText(/^Paze · Urban Market$/)).toBeVisible()
+
+  // Aggregate search uses the same submitted query and preserves it when the
+  // owner returns to the card grid.
+  await allTransactionsView.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/dashboard\?q=Paze&view=transactions$/)
+  await expect(page.getByRole('table', { name: /transactions across all cards/i })).toBeVisible()
+  await expect(page.getByText('10 matches for “Paze” across 8 cards')).toBeVisible()
+  await allCardsView.focus()
+  await page.keyboard.press('Space')
+  await expect(page).toHaveURL(/\/dashboard\?q=Paze$/)
+  await expect(page.getByRole('heading', { name: 'Search results' })).toBeVisible()
 
   await expectNoHorizontalOverflow(page)
 
@@ -277,6 +335,20 @@ test('dashboard keeps every visible element inside a narrow mobile device', asyn
   }
   await page.goto('/dashboard')
   await expect(page.getByRole('img', { name: /card ending in/i }).first()).toBeVisible()
+
+  await page.getByRole('button', { name: 'All transactions' }).click()
+  await expect(page).toHaveURL(/\/dashboard\?view=transactions$/)
+  const tableScroll = page.getByRole('region', { name: 'Scrollable transactions table' })
+  await expect(tableScroll).toBeVisible()
+  const dimensions = await tableScroll.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    overflowX: getComputedStyle(element).overflowX,
+  }))
+  expect(dimensions.overflowX, 'table owns a horizontal scroll region').toMatch(/^(auto|scroll)$/)
+  expect(dimensions.scrollWidth, 'table keeps its readable width inside a scroll region').toBeGreaterThanOrEqual(
+    dimensions.clientWidth,
+  )
 
   await expectNoHorizontalOverflow(page)
 })
