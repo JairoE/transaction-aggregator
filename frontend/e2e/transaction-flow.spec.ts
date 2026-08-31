@@ -90,8 +90,31 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
           const ancestorStyles = getComputedStyle(ancestor)
           const ancestorBounds = ancestor.getBoundingClientRect()
           const clipsHorizontally = /(?:auto|scroll)/.test(ancestorStyles.overflowX)
+          const ownsHorizontalOverflow = ancestor.scrollWidth > ancestor.clientWidth + 1
+          const hasEscapingPositionedAncestor = (() => {
+            let positionedElement: HTMLElement | null = htmlElement
+            while (positionedElement && positionedElement !== ancestor) {
+              const positionedStyles = getComputedStyle(positionedElement)
+              if (positionedStyles.position === 'fixed') {
+                return true
+              }
+              if (positionedStyles.position === 'absolute') {
+                const positionedBounds = positionedElement.getBoundingClientRect()
+                if (
+                  positionedBounds.right <= ancestorBounds.left - 0.5 ||
+                  positionedBounds.left >= ancestorBounds.right + 0.5
+                ) {
+                  return true
+                }
+              }
+              positionedElement = positionedElement.parentElement
+            }
+            return false
+          })()
           if (
             clipsHorizontally &&
+            ownsHorizontalOverflow &&
+            !hasEscapingPositionedAncestor &&
             ancestorBounds.left >= -0.5 &&
             ancestorBounds.right <= viewportWidth + 0.5
           ) {
@@ -351,6 +374,37 @@ test('dashboard keeps every visible element inside a narrow mobile device', asyn
   )
 
   await expectNoHorizontalOverflow(page)
+})
+
+test('overflow checks do not trust a computed scroller without horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 300 })
+
+  // overflow-y: auto computes overflow-x to auto in CSSOM, but this fixed
+  // child cannot contribute to the ancestor's horizontal scroll range.
+  await page.evaluate(() => {
+    document.body.innerHTML = `
+      <div id="false-scroll" style="width: 120px; height: 40px; overflow-y: auto;">
+        <div style="height: 20px;">No horizontal content</div>
+        <div style="position: fixed; left: 330px; top: 0; width: 80px; height: 20px;">Escapes</div>
+      </div>
+    `
+  })
+  await expect(expectNoHorizontalOverflow(page)).rejects.toThrow('visible elements must stay within the device width')
+})
+
+test('overflow checks do not exempt fixed descendants from a real scroller', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 300 })
+  // A real horizontal scroller must still reject a fixed descendant that is
+  // geometrically outside its scrollable content.
+  await page.evaluate(() => {
+    document.body.innerHTML = `
+      <div id="real-scroll" style="width: 120px; height: 40px; overflow-x: auto;">
+        <div style="width: 500px; height: 20px;">Scrollable content</div>
+        <div style="position: fixed; left: 330px; top: 30px; width: 80px; height: 20px;">Escapes</div>
+      </div>
+    `
+  })
+  await expect(expectNoHorizontalOverflow(page)).rejects.toThrow('visible elements must stay within the device width')
 })
 
 test('every outlined card keeps its small accent label at AA contrast', async ({ page }) => {
