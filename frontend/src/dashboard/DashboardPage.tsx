@@ -212,6 +212,16 @@ export function DashboardPage() {
     }
   }, [allTransactionsQuery.data, aggregatePage, submittedQuery])
 
+  const connectionFleet = useMemo(() => {
+    const representedBanks = (connectionsQuery.data?.banks ?? []).filter(
+      (bank) => bank.connected && bank.card_count > 0,
+    )
+    return {
+      cardCount: representedBanks.reduce((total, bank) => total + bank.card_count, 0),
+      bankCount: representedBanks.length,
+    }
+  }, [connectionsQuery.data])
+
   useEffect(() => {
     if (owner && allTransactionsQuery.isSuccess && aggregateData) {
       persistAllTransactionsResult(owner.id, submittedQuery, aggregateData)
@@ -219,11 +229,13 @@ export function DashboardPage() {
   }, [owner, allTransactionsQuery.isSuccess, aggregateData, submittedQuery])
 
   const activeData = view === 'cards' ? searchQuery.data : aggregateData
-  const cardCount = activeData?.card_count ?? 0
+  const cardCount = activeData?.card_count ?? connectionFleet.cardCount
   const bankCount =
     view === 'cards'
-      ? new Set((searchQuery.data?.groups ?? []).map((group) => group.card.bank)).size
-      : (aggregateData?.bank_count ?? 0)
+      ? searchQuery.data
+        ? new Set(searchQuery.data.groups.map((group) => group.card.bank)).size
+        : connectionFleet.bankCount
+      : (aggregateData?.bank_count ?? connectionFleet.bankCount)
   const hasQuery = submittedQuery.length > 0
   const activeIsFetching = view === 'cards' ? searchQuery.isFetching : allTransactionsQuery.isFetching
   const statusPillText = formatSyncStatus(activeData?.cache_as_of ?? null)

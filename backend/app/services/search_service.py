@@ -212,7 +212,11 @@ class AggregateCursorCodec:
         except (KeyError, TypeError, ValueError) as error:
             raise _cursor_invalid() from error
 
-        if query != expected_query or not isinstance(row_id, str):
+        if not isinstance(query, str) or not hmac.compare_digest(
+            query, expected_query
+        ):
+            raise _cursor_invalid()
+        if not isinstance(row_id, str):
             raise _cursor_invalid()
         if sort_date is not None and not isinstance(sort_date, str):
             raise _cursor_invalid()

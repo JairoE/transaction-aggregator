@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Annotated, Literal, Self
 
-from pydantic import BaseModel, EmailStr, Field, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+
+from app.card_masks import normalize_card_mask
 
 BankSlug = Literal["capital-one", "chase", "citi", "wells-fargo"]
 
@@ -88,6 +90,11 @@ class CardResponse(BaseModel):
     mask: str | None
     state: str = "ready"
     last_successful_sync_at: datetime | None = None
+
+    @field_validator("mask", mode="before")
+    @classmethod
+    def keep_only_safe_last_four(cls, value: object) -> str | None:
+        return normalize_card_mask(value if isinstance(value, str) else None)
 
 
 class ExchangeResponse(BaseModel):

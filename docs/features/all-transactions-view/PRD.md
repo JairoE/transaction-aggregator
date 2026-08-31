@@ -1,6 +1,6 @@
 # All Transactions View PRD
 
-- **Status:** Proposed for review
+- **Status:** Approved and implemented
 - **Date:** August 30, 2026
 - **Owner:** Transaction Aggregator product owner
 - **Related product requirements:** `docs/PRD.md`

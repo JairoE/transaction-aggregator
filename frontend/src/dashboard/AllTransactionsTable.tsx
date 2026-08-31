@@ -1,3 +1,4 @@
+import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { describeAmount, formatAmount, formatShortDate } from './format'
 import { highlightText } from './highlight'
@@ -94,6 +95,35 @@ export function AllTransactionsTable({
   onRetryInitial,
   onLoadMore,
 }: AllTransactionsTableProps) {
+  const scrollRegionRef = useRef<HTMLDivElement>(null)
+  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false)
+  const measureHorizontalOverflow = useCallback(() => {
+    const region = scrollRegionRef.current
+    setHasHorizontalOverflow(
+      region !== null && region.scrollWidth > region.clientWidth + 1,
+    )
+  }, [])
+
+  useLayoutEffect(() => {
+    const region = scrollRegionRef.current
+    if (!region) return
+
+    measureHorizontalOverflow()
+    window.addEventListener('resize', measureHorizontalOverflow)
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(measureHorizontalOverflow)
+    resizeObserver?.observe(region)
+    const table = region.querySelector('table')
+    if (table) resizeObserver?.observe(table)
+
+    return () => {
+      window.removeEventListener('resize', measureHorizontalOverflow)
+      resizeObserver?.disconnect()
+    }
+  }, [cardCount, initialError, measureHorizontalOverflow, rows])
+
   if (initialError) {
     return (
       <section className="all-transactions-table" aria-label="All transactions">
@@ -126,9 +156,10 @@ export function AllTransactionsTable({
   return (
     <section className="all-transactions-table" aria-label="All transactions">
       <div
+        ref={scrollRegionRef}
         className="all-transactions-table__scroll"
         role="region"
-        tabIndex={0}
+        tabIndex={hasHorizontalOverflow ? 0 : undefined}
         aria-label="Scrollable transactions table"
       >
         <table>

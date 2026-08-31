@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.models import CardAccount
 
 
 async def test_search_requires_authentication(client: AsyncClient) -> None:
@@ -208,6 +211,37 @@ async def test_all_transactions_paze_rows_include_nested_transaction_and_card(
     assert all(set(row) == {"transaction", "card"} for row in body["rows"])
     assert all(row["card"]["bank"] for row in body["rows"])
     assert all(row["card"]["mask"] for row in body["rows"])
+
+
+async def test_card_responses_never_serialize_malformed_or_non_four_digit_masks(
+    demo_client: AsyncClient, demo_login, eight_card_owner, db_session
+) -> None:
+    initial = (await demo_client.get("/api/transactions?q=Paze")).json()
+    card_id = initial["rows"][0]["card"]["id"]
+    card = (
+        await db_session.execute(select(CardAccount).where(CardAccount.id == card_id))
+    ).scalars().one()
+
+    for unsafe_mask in ["4111111111111111", "123", "12A4", "１２３４"]:
+        card.mask = unsafe_mask
+        await db_session.commit()
+
+        aggregate = (await demo_client.get("/api/transactions?q=Paze")).json()
+        aggregate_card = next(
+            row["card"] for row in aggregate["rows"] if row["card"]["id"] == card_id
+        )
+        assert aggregate_card["mask"] is None
+
+    grouped = (await demo_client.get("/api/transactions/search?q=Paze")).json()
+    grouped_card = next(
+        group["card"] for group in grouped["groups"] if group["card"]["id"] == card_id
+    )
+    per_card = (
+        await demo_client.get(f"/api/cards/{card_id}/transactions?q=Paze")
+    ).json()
+
+    assert grouped_card["mask"] is None
+    assert per_card["card"]["mask"] is None
 
 
 async def test_all_transactions_validates_limit_and_query_boundaries(

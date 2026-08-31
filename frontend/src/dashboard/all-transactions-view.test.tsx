@@ -1,11 +1,15 @@
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/server'
 import { renderAppAt } from '../test/renderApp'
 import { runAxeSmokeTest } from '../test/axe'
-import { authenticatedSessionHandler } from '../test/handlers'
+import {
+  authenticatedSessionHandler,
+  connectionsHandler,
+  makeConnectionsResponse,
+} from '../test/handlers'
 import {
   DASHBOARD_CARDS,
   aggregateNextPage,
@@ -24,6 +28,11 @@ async function renderDashboard(path = '/dashboard') {
   await screen.findByRole('heading', { name: /your credit cards|all transactions|search results/i })
   return utils
 }
+
+const knownFleet = makeConnectionsResponse([
+  { bank: 'capital-one', connected: true, connection_id: 'conn-capital-one', card_count: 2 },
+  { bank: 'chase', connected: true, connection_id: 'conn-chase', card_count: 1 },
+])
 
 describe('All transactions dashboard view', () => {
   beforeEach(() => {
@@ -308,6 +317,88 @@ describe('All transactions dashboard view', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('We could not load transactions. Try again.')
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     expect(await screen.findByText('Capital One Newest Purchase')).toBeInTheDocument()
+  })
+
+  it('keeps the known fleet summary while the initial aggregate request is loading', async () => {
+    let releaseAggregate: (() => void) | undefined
+    const pendingAggregate = new Promise<void>((resolve) => {
+      releaseAggregate = resolve
+    })
+    server.use(
+      connectionsHandler(knownFleet),
+      allTransactionsHandler(async () => {
+        await pendingAggregate
+        return recentAllTransactionsResponse()
+      }),
+    )
+
+    await renderDashboard('/dashboard?view=transactions')
+
+    expect(await screen.findByText('3 cards · 2 banks')).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('Loading transactions…')
+    releaseAggregate?.()
+    expect(await screen.findByRole('table')).toBeInTheDocument()
+  })
+
+  it('keeps the known fleet summary when the initial aggregate request fails', async () => {
+    server.use(
+      connectionsHandler(knownFleet),
+      http.get('/api/transactions', () =>
+        HttpResponse.json(
+          { code: 'REQUEST_FAILED', message: 'Temporary failure.' },
+          { status: 500 },
+        ),
+      ),
+    )
+
+    await renderDashboard('/dashboard?view=transactions')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'We could not load transactions. Try again.',
+    )
+    expect(screen.getByText('3 cards · 2 banks')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'All transactions' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    )
+  })
+
+  it('does not add a keyboard tab stop when the table has no horizontal overflow', async () => {
+    server.use(allTransactionsHandler(() => recentAllTransactionsResponse()))
+
+    await renderDashboard('/dashboard?view=transactions')
+
+    const region = await screen.findByRole('region', {
+      name: /scrollable transactions table/i,
+    })
+    expect(region).not.toHaveAttribute('tabindex')
+  })
+
+  it('makes the table scroll region keyboard-focusable only when it overflows', async () => {
+    server.use(allTransactionsHandler(() => recentAllTransactionsResponse()))
+    const clientWidth = vi
+      .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains('all-transactions-table__scroll') ? 400 : 0
+      })
+    const scrollWidth = vi
+      .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains('all-transactions-table__scroll') ? 760 : 0
+      })
+
+    try {
+      await renderDashboard('/dashboard?view=transactions')
+
+      const region = await screen.findByRole('region', {
+        name: /scrollable transactions table/i,
+      })
+      fireEvent(window, new Event('resize'))
+      await waitFor(() => expect(region).toHaveAttribute('tabindex', '0'))
+    } finally {
+      clientWidth.mockRestore()
+      scrollWidth.mockRestore()
+    }
   })
 
   it('hydrates offline only from the matching owner and submitted-query cache', async () => {

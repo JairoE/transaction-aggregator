@@ -8,7 +8,7 @@ from sqlalchemy import select
 
 from app.errors import AppError
 from app.models import BankConnection, CardAccount, Owner, Transaction
-from app.services.search_service import normalize_query
+from app.services.search_service import AggregateCursorCodec, normalize_query
 
 
 async def _add_transaction(
@@ -355,6 +355,39 @@ async def test_all_transactions_paginates_dated_and_null_date_rows_without_dupli
     assert len(received) == len(set(received))
 
 
+async def test_all_transactions_paginates_equal_dates_by_descending_id(
+    search_service, eight_card_owner, db_session
+) -> None:
+    cards = (await search_service.list_cards(eight_card_owner.id))[:3]
+    for transaction_id, card in zip(
+        ["equal-date-c", "equal-date-b", "equal-date-a"], cards, strict=True
+    ):
+        await _add_transaction(
+            db_session,
+            transaction_id=transaction_id,
+            card_id=card.id,
+            search_text="Equal Date Cursor Sentinel",
+            posted_date=date(2026, 9, 6),
+        )
+
+    first = await search_service.all_transactions(
+        eight_card_owner.id, "Equal Date Cursor Sentinel", limit=2
+    )
+    second = await search_service.all_transactions(
+        eight_card_owner.id,
+        "Equal Date Cursor Sentinel",
+        limit=2,
+        cursor=first.next_cursor,
+    )
+
+    assert [row.transaction.id for row in first.rows] == [
+        "equal-date-c",
+        "equal-date-b",
+    ]
+    assert [row.transaction.id for row in second.rows] == ["equal-date-a"]
+    assert second.has_more is False
+
+
 async def test_all_transactions_cursor_is_signed_and_bound_to_query(
     search_service, eight_card_owner
 ) -> None:
@@ -375,6 +408,28 @@ async def test_all_transactions_cursor_is_signed_and_bound_to_query(
 
     assert tampered_error.value.code == "CURSOR_INVALID"
     assert replay_error.value.code == "CURSOR_INVALID"
+
+
+def test_aggregate_cursor_uses_constant_time_comparison_for_query_binding(
+    monkeypatch,
+) -> None:
+    import app.services.search_service as search_service_module
+
+    calls: list[tuple[object, object]] = []
+    real_compare_digest = search_service_module.hmac.compare_digest
+
+    def recording_compare_digest(left, right):
+        calls.append((left, right))
+        return real_compare_digest(left, right)
+
+    monkeypatch.setattr(
+        search_service_module.hmac, "compare_digest", recording_compare_digest
+    )
+    codec = AggregateCursorCodec("s" * 32)
+    cursor = codec.encode("paze", "2026-09-06", "transaction-id")
+
+    assert codec.decode(cursor, "paze") == ("2026-09-06", "transaction-id")
+    assert calls[-1] == ("paze", "paze")
 
 
 async def test_all_transactions_excludes_other_owner_inactive_card_and_removed_connection_rows(
