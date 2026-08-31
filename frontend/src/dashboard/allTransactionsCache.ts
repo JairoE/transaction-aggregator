@@ -55,9 +55,9 @@ function isCardResponse(value: unknown): value is CardResponse {
     typeof value.connection_id === 'string' &&
     typeof value.bank === 'string' &&
     BANKS.has(value.bank) &&
-    typeof value.bank_display_name === 'string' &&
-    typeof value.name === 'string' &&
-    isStringOrNull(value.official_name) &&
+    isSafeDisplayText(value.bank_display_name) &&
+    isSafeDisplayText(value.name) &&
+    isSafeDisplayText(value.official_name) &&
     isLastFourMask(value.mask) &&
     typeof value.state === 'string' &&
     (value.last_successful_sync_at === undefined || isStringOrNull(value.last_successful_sync_at))
@@ -73,7 +73,7 @@ function isTransactionMatch(value: unknown): value is TransactionMatch {
     typeof value.description === 'string' &&
     isSafeDisplayText(value.description) &&
     isSafeDisplayText(value.original_description) &&
-    isStringOrNull(value.category) &&
+    isSafeDisplayText(value.category) &&
     typeof value.amount_cents === 'number' &&
     typeof value.currency_code === 'string' &&
     isStringOrNull(value.authorized_date) &&
@@ -118,6 +118,7 @@ function sanitizeAllTransactionsResponse(value: unknown): AllTransactionsRespons
   if (
     !isRecord(value) ||
     typeof value.query !== 'string' ||
+    !isSafeDisplayText(value.query) ||
     typeof value.total_matches !== 'number' ||
     typeof value.card_count !== 'number' ||
     typeof value.bank_count !== 'number' ||

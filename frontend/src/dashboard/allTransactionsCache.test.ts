@@ -158,6 +158,7 @@ describe('all-transactions session cache', () => {
     ['description', '4111111111111111'],
     ['merchant_name', '4111 1111 1111 1111'],
     ['original_description', '4111-1111-1111-1111'],
+    ['category', 'Category 5555-5555-5555-4444'],
     ['description', '4111  1111  1111  1111'],
     ['merchant_name', '4111\t1111\t1111\t1111'],
     ['original_description', '4111\u00a01111\u00a01111\u00a01111'],
@@ -171,6 +172,42 @@ describe('all-transactions session cache', () => {
           {
             ...mergedResponse.rows[0],
             transaction: { ...mergedResponse.rows[0].transaction, [field]: pan },
+          },
+        ],
+      }
+
+      persistAllTransactionsResult('owner-a', 'Paze', unsafeResponse)
+      expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+
+      window.sessionStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          version: 1,
+          ownerId: 'owner-a',
+          queryKey: 'paze',
+          cachedAt: NOW,
+          data: unsafeResponse,
+        }),
+      )
+      expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)).toBeNull()
+      expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+    },
+  )
+
+  it.each([
+    ['name', 'Card 4000\t0000\t0000\t0002'],
+    ['bank_display_name', 'Bank 6011\u00a01111\u00a01111\u00a01117'],
+    ['official_name', 'Official 4111-1111-1111-1111'],
+  ] as const)(
+    'rejects a PAN-like value in card %s before persistence and hydration',
+    (field, pan) => {
+      vi.spyOn(Date, 'now').mockReturnValue(NOW)
+      const unsafeResponse: AllTransactionsResponse = {
+        ...mergedResponse,
+        rows: [
+          {
+            ...mergedResponse.rows[0],
+            card: { ...mergedResponse.rows[0].card, [field]: pan },
           },
         ],
       }

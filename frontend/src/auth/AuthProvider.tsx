@@ -65,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     apiClient.onAuthRequired(() => {
       queryClient.setQueryData<SessionResponse | null>(SESSION_QUERY_KEY, null)
+      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'auth' })
     })
     return () => apiClient.onAuthRequired(null)
   }, [queryClient])

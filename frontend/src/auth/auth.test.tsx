@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { screen } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { delay, http, HttpResponse } from 'msw'
 import { server } from '../test/server'
@@ -13,6 +13,7 @@ import {
   logoutHandler,
   makeConnectionsResponse,
 } from '../test/handlers'
+import { recentAllTransactionsResponse, recentSearchResponse, searchHandler } from '../test/dashboardFixtures'
 
 describe('owner sign-in', () => {
   it('shows the owner sign-in form to an anonymous visitor', async () => {
@@ -189,5 +190,61 @@ describe('owner sign-in', () => {
     await screen.findByRole('heading', { name: /connect your credit cards/i })
 
     expect(window.localStorage.getItem('ta:search-history:owner-1')).toBeNull()
+  })
+
+  it('does not render a previous owner aggregate result after auth invalidation and a new sign-in', async () => {
+    let owner = 'owner-1'
+    let aggregateAttempts = 0
+    server.resetHandlers()
+    server.use(
+      http.get('/api/auth/session', () => HttpResponse.json({
+        owner: { id: owner, email: `${owner}@example.com` },
+        csrf_token: `${owner}-csrf-token-0123456789`,
+      })),
+      connectionsHandler(makeConnectionsResponse([{ bank: 'capital-one', connected: true, card_count: 1 }])),
+      http.get('/api/transaction-limit-alerts', () => HttpResponse.json({
+        alerts: [], evaluated_at: '2026-08-22T12:00:00Z', as_of_date: '2026-08-22', cache_as_of: null,
+      })),
+      searchHandler(() => recentSearchResponse()),
+      http.get('/api/transactions', () => {
+        aggregateAttempts += 1
+        if (aggregateAttempts === 2) {
+          return HttpResponse.json({ code: 'AUTH_REQUIRED', message: 'Sign in to continue.' }, { status: 401 })
+        }
+        return HttpResponse.json(recentAllTransactionsResponse())
+      }),
+      http.post('/api/auth/login', () => {
+        owner = 'owner-2'
+        return HttpResponse.json({
+          owner: { id: owner, email: `${owner}@example.com` },
+          csrf_token: `${owner}-csrf-token-0123456789`,
+        })
+      }),
+    )
+
+    const user = userEvent.setup()
+    renderAppAt('/dashboard?view=transactions')
+    expect(await screen.findByText('Capital One Newest Purchase')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'All cards' }))
+    await user.click(screen.getByRole('button', { name: 'All transactions' }))
+    expect(await screen.findByRole('heading', { name: /find any credit-card transaction/i })).toBeInTheDocument()
+
+    await user.type(screen.getByRole('textbox', { name: /email/i }), 'owner-2@example.com')
+    await user.type(screen.getByLabelText(/password/i), 'correct horse battery staple')
+    await user.click(screen.getByRole('button', { name: /sign in/i }))
+    await screen.findByRole('heading', { name: /connect your credit cards/i })
+    await user.click(screen.getByRole('button', { name: /view cards/i }))
+    await screen.findByRole('heading', { name: /your credit cards/i })
+    try {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+      fireEvent(window, new Event('offline'))
+      await user.click(screen.getByRole('button', { name: 'All transactions' }))
+
+      expect(aggregateAttempts).toBe(2)
+      expect(screen.queryByText('Capital One Newest Purchase')).not.toBeInTheDocument()
+    } finally {
+      delete (navigator as { onLine?: boolean }).onLine
+    }
   })
 })

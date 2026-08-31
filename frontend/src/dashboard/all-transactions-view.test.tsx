@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { http, HttpResponse } from 'msw'
 import { server } from '../test/server'
@@ -11,6 +11,8 @@ import {
   aggregateNextPage,
   allTransactionsHandler,
   emptyAllTransactionsResponse,
+  pazeFirstCardNextPage,
+  pazeSearchResponse,
   pazeAllTransactionsResponse,
   recentAllTransactionsResponse,
   searchHandler,
@@ -64,6 +66,7 @@ describe('All transactions dashboard view', () => {
     expect([...screen.getAllByRole('columnheader')].map((header) => header.textContent)).toEqual([
       'Date', 'Merchant', 'Card number', 'Bank', 'Amount', 'Status', 'Actions',
     ])
+    expect(screen.getByRole('region', { name: /scrollable transactions table/i })).toBeInTheDocument()
 
     const user = userEvent.setup()
     await user.click(screen.getByRole('button', { name: 'All cards' }))
@@ -168,6 +171,7 @@ describe('All transactions dashboard view', () => {
       releaseContinuation = resolve
     })
     server.use(
+      allTransactionsHandler(() => recentAllTransactionsResponse()),
       http.get('/api/transactions', async ({ request }) => {
         const cursor = new URL(request.url).searchParams.get('cursor')
         if (!cursor) return HttpResponse.json(recentAllTransactionsResponse())
@@ -187,6 +191,62 @@ describe('All transactions dashboard view', () => {
       expect(screen.getByRole('button', { name: /load more transactions/i })).toBeEnabled()
       expect(screen.queryByText('Wells Fargo Later Purchase')).not.toBeInTheDocument()
     })
+  })
+
+  it('discards a card continuation response after submitting a different query', async () => {
+    let releaseContinuation: (() => void) | undefined
+    const pendingContinuation = new Promise<void>((resolve) => {
+      releaseContinuation = resolve
+    })
+    server.use(
+      searchHandler((query) => (query === 'Paze' ? pazeSearchResponse() : recentSearchResponse())),
+      http.get('/api/cards/:cardId/transactions', async ({ request }) => {
+        const cursor = new URL(request.url).searchParams.get('cursor')
+        if (cursor) {
+          await pendingContinuation
+          return HttpResponse.json(pazeFirstCardNextPage())
+        }
+        return HttpResponse.json(pazeFirstCardNextPage())
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
+    const targetRegion = screen.getByRole('region', { name: /capital one card ending in 4812/i })
+    await user.click(within(targetRegion).getByRole('button', { name: /load more/i }))
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Juniper{Enter}')
+    await screen.findByText(/every matching transaction remains grouped/i)
+    await screen.findAllByText('Capital One Everyday Purchase')
+
+    releaseContinuation?.()
+    await waitFor(() => expect(screen.queryByText('Paze Checkout 2')).not.toBeInTheDocument())
+  })
+
+  it('discards a card continuation response after switching away and back', async () => {
+    let releaseContinuation: (() => void) | undefined
+    const pendingContinuation = new Promise<void>((resolve) => {
+      releaseContinuation = resolve
+    })
+    server.use(
+      searchHandler((query) => (query === 'Paze' ? pazeSearchResponse() : recentSearchResponse())),
+      allTransactionsHandler(() => recentAllTransactionsResponse()),
+      http.get('/api/cards/:cardId/transactions', async () => {
+        await pendingContinuation
+        return HttpResponse.json(pazeFirstCardNextPage())
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
+    const targetRegion = screen.getByRole('region', { name: /capital one card ending in 4812/i })
+    await user.click(within(targetRegion).getByRole('button', { name: /load more/i }))
+    await user.click(screen.getByRole('button', { name: 'All transactions' }))
+    await user.click(screen.getByRole('button', { name: 'All cards' }))
+    releaseContinuation?.()
+
+    await waitFor(() => expect(screen.queryByText('Paze Checkout 2')).not.toBeInTheDocument())
   })
 
   it('resets aggregate rows on an explicit new search without writing history during a view change', async () => {
@@ -284,5 +344,28 @@ describe('All transactions dashboard view', () => {
     const { container } = await renderDashboard('/dashboard?view=transactions')
     await screen.findByRole('table')
     await runAxeSmokeTest(container)
+  })
+
+  it('marks the initial retry unavailable while offline and does not request on click', async () => {
+    let attempts = 0
+    server.use(http.get('/api/transactions', () => {
+      attempts += 1
+      return HttpResponse.json({ code: 'REQUEST_FAILED', message: 'Temporary failure.' }, { status: 500 })
+    }))
+    await renderDashboard('/dashboard?view=transactions')
+    expect(await screen.findByRole('alert')).toHaveTextContent(/could not load transactions/i)
+    expect(attempts).toBe(1)
+
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true })
+    try {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false })
+      fireEvent(window, new Event('offline'))
+      const retry = screen.getByRole('button', { name: 'Retry' })
+      await waitFor(() => expect(retry).toBeDisabled())
+      await userEvent.setup().click(retry)
+      expect(attempts).toBe(1)
+    } finally {
+      delete (navigator as { onLine?: boolean }).onLine
+    }
   })
 })

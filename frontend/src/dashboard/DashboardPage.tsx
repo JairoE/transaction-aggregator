@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -40,6 +40,18 @@ interface AggregatePageState {
   hasMore: boolean
 }
 
+interface CardLoadMoreVariables {
+  cardId: string
+  query: string
+  generation: number
+}
+
+interface AggregateLoadMoreVariables {
+  query: string
+  cursor: string
+  generation: number
+}
+
 function resolveView(value: string | null): DashboardView {
   return value === 'transactions' ? 'transactions' : 'cards'
 }
@@ -61,10 +73,19 @@ export function DashboardPage() {
   const view = resolveView(searchParams.get('view'))
   const [pageState, setPageState] = useState<Record<string, CardPageState>>({})
   const [aggregatePage, setAggregatePage] = useState<AggregatePageState | null>(null)
+  const continuationScopeKey = `${view}\u0000${submittedQuery}`
+  const continuationScopeRef = useRef({ key: continuationScopeKey, generation: 0 })
+  if (continuationScopeRef.current.key !== continuationScopeKey) {
+    continuationScopeRef.current = {
+      key: continuationScopeKey,
+      generation: continuationScopeRef.current.generation + 1,
+    }
+  }
+  const continuationGeneration = continuationScopeRef.current.generation
 
   const connectionsQuery = useQuery(connectionsQueryOptions)
   const searchQuery = useQuery({
-    queryKey: ['transactions', 'search', submittedQuery] as const,
+    queryKey: ['transactions', 'search', owner?.id ?? null, submittedQuery] as const,
     queryFn: () => fetchTransactionSearch(submittedQuery),
     placeholderData: keepPreviousData,
     enabled: isOnline && view === 'cards',
@@ -74,7 +95,7 @@ export function DashboardPage() {
       owner ? readPersistedSearchResult(owner.id, submittedQuery)?.cachedAt : undefined,
   })
   const allTransactionsQuery = useQuery({
-    queryKey: ['transactions', 'all', submittedQuery] as const,
+    queryKey: ['transactions', 'all', owner?.id ?? null, submittedQuery] as const,
     queryFn: () => fetchAllTransactions(submittedQuery, null),
     enabled: isOnline && view === 'transactions',
     initialData: () =>
@@ -105,12 +126,18 @@ export function DashboardPage() {
   }, [submittedQuery, view])
 
   const loadMoreMutation = useMutation({
-    mutationFn: async (cardId: string) => {
+    mutationFn: async ({ cardId, query, generation }: CardLoadMoreVariables) => {
       const baseGroup = searchQuery.data?.groups.find((group) => group.card.id === cardId)
       const cursor = pageState[cardId]?.cursor ?? baseGroup?.next_cursor ?? null
-      return { cardId, group: await fetchCardTransactions(cardId, submittedQuery, cursor) }
+      return {
+        cardId,
+        query,
+        generation,
+        group: await fetchCardTransactions(cardId, query, cursor),
+      }
     },
-    onSuccess: ({ cardId, group }) => {
+    onSuccess: ({ cardId, query, generation, group }) => {
+      if (query !== submittedQuery || view !== 'cards' || generation !== continuationGeneration) return
       setPageState((previous) => ({
         ...previous,
         [cardId]: {
@@ -122,10 +149,14 @@ export function DashboardPage() {
     },
   })
   const aggregateMoreMutation = useMutation({
-    mutationFn: ({ query, cursor }: { query: string; cursor: string }) =>
+    mutationFn: ({ query, cursor }: AggregateLoadMoreVariables) =>
       fetchAllTransactions(query, cursor),
     onSuccess: (page, variables) => {
-      if (variables.query !== submittedQuery) return
+      if (
+        variables.query !== submittedQuery ||
+        view !== 'transactions' ||
+        variables.generation !== continuationGeneration
+      ) return
       setAggregatePage((previous) => {
         const baseRows = allTransactionsQuery.data?.rows ?? []
         const previousRows = previous?.query === variables.query ? previous.rows : []
@@ -146,7 +177,7 @@ export function DashboardPage() {
     aggregateMoreMutation.reset()
   }, [submittedQuery, view])
 
-  const pendingCardId = loadMoreMutation.isPending ? (loadMoreMutation.variables ?? null) : null
+  const pendingCardId = loadMoreMutation.isPending ? (loadMoreMutation.variables?.cardId ?? null) : null
   const groups = useMemo<DashboardCardGroup[]>(
     () =>
       (searchQuery.data?.groups ?? []).map((group) => {
@@ -296,7 +327,13 @@ export function DashboardPage() {
             <SearchQueryProvider value={submittedQuery}>
               <CardGrid
                 groups={groups}
-                onLoadMore={(cardId) => loadMoreMutation.mutate(cardId)}
+                onLoadMore={(cardId) =>
+                  loadMoreMutation.mutate({
+                    cardId,
+                    query: submittedQuery,
+                    generation: continuationGeneration,
+                  })
+                }
               />
             </SearchQueryProvider>
           )
@@ -311,11 +348,18 @@ export function DashboardPage() {
             isLoadingMore={aggregateMoreMutation.isPending}
             continuationError={aggregateMoreMutation.isError}
             initialError={allTransactionsQuery.isError && !aggregateData}
-            onRetryInitial={() => void allTransactionsQuery.refetch()}
+            canRetryInitial={isOnline}
+            onRetryInitial={() => {
+              if (isOnline) void allTransactionsQuery.refetch()
+            }}
             onLoadMore={() => {
               const cursor = aggregateData?.next_cursor
               if (cursor && !aggregateMoreMutation.isPending) {
-                aggregateMoreMutation.mutate({ query: submittedQuery, cursor })
+                aggregateMoreMutation.mutate({
+                  query: submittedQuery,
+                  cursor,
+                  generation: continuationGeneration,
+                })
               }
             }}
           />

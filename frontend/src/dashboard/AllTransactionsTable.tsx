@@ -14,6 +14,7 @@ export interface AllTransactionsTableProps {
   isLoadingMore: boolean
   continuationError: boolean
   initialError: boolean
+  canRetryInitial: boolean
   onRetryInitial: () => void
   onLoadMore: () => void
 }
@@ -89,6 +90,7 @@ export function AllTransactionsTable({
   isLoadingMore,
   continuationError,
   initialError,
+  canRetryInitial,
   onRetryInitial,
   onLoadMore,
 }: AllTransactionsTableProps) {
@@ -96,7 +98,9 @@ export function AllTransactionsTable({
     return (
       <section className="all-transactions-table" aria-label="All transactions">
         <p role="alert">We could not load transactions. Try again.</p>
-        <button type="button" onClick={onRetryInitial}>Retry</button>
+        <button type="button" onClick={onRetryInitial} disabled={!canRetryInitial}>
+          Retry
+        </button>
       </section>
     )
   }
@@ -121,7 +125,12 @@ export function AllTransactionsTable({
 
   return (
     <section className="all-transactions-table" aria-label="All transactions">
-      <div className="all-transactions-table__scroll" tabIndex={0} aria-label="Scrollable transactions table">
+      <div
+        className="all-transactions-table__scroll"
+        role="region"
+        tabIndex={0}
+        aria-label="Scrollable transactions table"
+      >
         <table>
           <caption className="sr-only">Transactions across all cards</caption>
           <thead>
