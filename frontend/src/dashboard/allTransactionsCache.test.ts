@@ -130,6 +130,66 @@ describe('all-transactions session cache', () => {
     expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)).toBeNull()
   })
 
+  it('rejects non-last-four card masks before persistence and hydration', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const unsafeResponse: AllTransactionsResponse = {
+      ...mergedResponse,
+      rows: [{ ...mergedResponse.rows[0], card: { ...mergedResponse.rows[0].card, mask: '12345' } }],
+    }
+
+    persistAllTransactionsResult('owner-a', 'Paze', unsafeResponse)
+    expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+
+    window.sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        version: 1,
+        ownerId: 'owner-a',
+        queryKey: 'paze',
+        cachedAt: NOW,
+        data: unsafeResponse,
+      }),
+    )
+    expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)).toBeNull()
+    expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+  })
+
+  it.each([
+    ['description', '4111111111111111'],
+    ['merchant_name', '4111 1111 1111 1111'],
+    ['original_description', '4111-1111-1111-1111'],
+  ] as const)(
+    'rejects a PAN-like value in transaction %s before persistence and hydration',
+    (field, pan) => {
+      vi.spyOn(Date, 'now').mockReturnValue(NOW)
+      const unsafeResponse: AllTransactionsResponse = {
+        ...mergedResponse,
+        rows: [
+          {
+            ...mergedResponse.rows[0],
+            transaction: { ...mergedResponse.rows[0].transaction, [field]: pan },
+          },
+        ],
+      }
+
+      persistAllTransactionsResult('owner-a', 'Paze', unsafeResponse)
+      expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+
+      window.sessionStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          version: 1,
+          ownerId: 'owner-a',
+          queryKey: 'paze',
+          cachedAt: NOW,
+          data: unsafeResponse,
+        }),
+      )
+      expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)).toBeNull()
+      expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+    },
+  )
+
   it('rejects an entry whose embedded owner or query does not match its key scope', () => {
     window.sessionStorage.setItem(
       CACHE_KEY,

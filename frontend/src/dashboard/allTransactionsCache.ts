@@ -21,6 +21,8 @@ export interface PersistedAllTransactionsResult {
 type UnknownRecord = Record<string, unknown>
 
 const BANKS = new Set(['capital-one', 'chase', 'citi', 'wells-fargo'])
+const LAST_FOUR_MASK = /^\d{4}$/
+const PAN_LIKE_SEQUENCE = /(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)/
 
 function normalizeQuery(query: string): string {
   return query.trim().toLocaleLowerCase()
@@ -38,6 +40,14 @@ function isStringOrNull(value: unknown): value is string | null {
   return typeof value === 'string' || value === null
 }
 
+function isSafeDisplayText(value: unknown): value is string | null {
+  return isStringOrNull(value) && (value === null || !PAN_LIKE_SEQUENCE.test(value))
+}
+
+function isLastFourMask(value: unknown): value is string | null {
+  return value === null || (typeof value === 'string' && LAST_FOUR_MASK.test(value))
+}
+
 function isCardResponse(value: unknown): value is CardResponse {
   return (
     isRecord(value) &&
@@ -48,7 +58,7 @@ function isCardResponse(value: unknown): value is CardResponse {
     typeof value.bank_display_name === 'string' &&
     typeof value.name === 'string' &&
     isStringOrNull(value.official_name) &&
-    isStringOrNull(value.mask) &&
+    isLastFourMask(value.mask) &&
     typeof value.state === 'string' &&
     (value.last_successful_sync_at === undefined || isStringOrNull(value.last_successful_sync_at))
   )
@@ -59,9 +69,10 @@ function isTransactionMatch(value: unknown): value is TransactionMatch {
     isRecord(value) &&
     typeof value.id === 'string' &&
     typeof value.card_id === 'string' &&
-    isStringOrNull(value.merchant_name) &&
+    isSafeDisplayText(value.merchant_name) &&
     typeof value.description === 'string' &&
-    isStringOrNull(value.original_description) &&
+    isSafeDisplayText(value.description) &&
+    isSafeDisplayText(value.original_description) &&
     isStringOrNull(value.category) &&
     typeof value.amount_cents === 'number' &&
     typeof value.currency_code === 'string' &&
