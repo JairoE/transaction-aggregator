@@ -105,6 +105,14 @@ describe('owner sign-in', () => {
       'ta:search-history:owner-1',
       JSON.stringify([{ query: 'Paze', searchedAt: Date.now() }]),
     )
+    window.sessionStorage.setItem(
+      'transaction-aggregator:all-transactions:v1:owner-1:paze',
+      JSON.stringify({ cached: 'owner-1 aggregate transactions' }),
+    )
+    window.sessionStorage.setItem(
+      'transaction-aggregator:all-transactions:v1:owner-2:paze',
+      JSON.stringify({ cached: 'owner-2 aggregate transactions' }),
+    )
     renderAppAt('/connections')
 
     expect(
@@ -117,6 +125,12 @@ describe('owner sign-in', () => {
       await screen.findByRole('heading', { name: /find any credit-card transaction/i }),
     ).toBeInTheDocument()
     expect(window.localStorage.getItem('ta:search-history:owner-1')).toContain('Paze')
+    expect(
+      window.sessionStorage.getItem('transaction-aggregator:all-transactions:v1:owner-1:paze'),
+    ).toBeNull()
+    expect(
+      window.sessionStorage.getItem('transaction-aggregator:all-transactions:v1:owner-2:paze'),
+    ).toContain('owner-2 aggregate transactions')
   })
 
   it('disables sign out while the request is pending', async () => {

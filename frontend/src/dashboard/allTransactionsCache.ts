@@ -224,3 +224,21 @@ export function readPersistedAllTransactionsResult(
     return null
   }
 }
+
+/** Removes one owner's aggregate snapshots when their authenticated session ends. */
+export function clearAllTransactionsCache(ownerId: string): void {
+  const prefix = `${STORAGE_PREFIX}${encodeURIComponent(ownerId)}:`
+  const ownerKeys: string[] = []
+
+  try {
+    for (let index = 0; index < window.sessionStorage.length; index += 1) {
+      const key = window.sessionStorage.key(index)
+      if (key?.startsWith(prefix)) {
+        ownerKeys.push(key)
+      }
+    }
+    ownerKeys.forEach((key) => window.sessionStorage.removeItem(key))
+  } catch {
+    // Storage may be disabled; logout must still complete.
+  }
+}

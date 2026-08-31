@@ -9,6 +9,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ApiError, apiClient, setCsrfToken } from '../api/client'
 import type { components } from '../api/generated'
 import { clearLinkContinuation } from '../connections/linkContinuation'
+import { clearAllTransactionsCache } from '../dashboard/allTransactionsCache'
 import { clearSearchCache } from '../dashboard/searchCache'
 import { readSearchHistory } from '../dashboard/searchHistory'
 
@@ -87,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const ownerId = sessionQuery.data?.owner.id
       if (ownerId) {
         clearLinkContinuation(ownerId)
+        clearAllTransactionsCache(ownerId)
         clearSearchCache(ownerId)
       }
       setCsrfToken(null)
