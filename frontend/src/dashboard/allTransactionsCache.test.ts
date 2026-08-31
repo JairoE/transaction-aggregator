@@ -230,6 +230,33 @@ describe('all-transactions session cache', () => {
     },
   )
 
+  it.each(['name', 'bank_display_name'] as const)(
+    'rejects null required card %s before persistence and hydration',
+    (field) => {
+      vi.spyOn(Date, 'now').mockReturnValue(NOW)
+      const tampered: { rows: Array<{ card: Record<string, unknown> }> } = JSON.parse(
+        JSON.stringify(mergedResponse),
+      )
+      tampered.rows[0].card[field] = null
+
+      persistAllTransactionsResult('owner-a', 'Paze', tampered as unknown as AllTransactionsResponse)
+      expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+
+      window.sessionStorage.setItem(
+        CACHE_KEY,
+        JSON.stringify({
+          version: 1,
+          ownerId: 'owner-a',
+          queryKey: 'paze',
+          cachedAt: NOW,
+          data: tampered,
+        }),
+      )
+      expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)).toBeNull()
+      expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+    },
+  )
+
   it('keeps ordinary shorter digit groups cacheable', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
     const ordinaryResponse: AllTransactionsResponse = {

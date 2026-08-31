@@ -27,8 +27,9 @@ function clampLimit(limit: number): number {
 
 // Note: these deliberately do NOT forward TanStack Query's queryFn
 // `AbortSignal` into `fetch()`. "Abort the previous request when the key
-// changes" is satisfied at the state level regardless — each submitted query
-// gets its own query-cache entry (`['transactions', 'search', submittedQuery]`),
+// changes" is satisfied at the state level regardless — each owner/submitted
+// query pair gets its own query-cache entry
+// (`['transactions', 'search', ownerId, submittedQuery]` in DashboardPage),
 // so a slow, still-in-flight request for an old key can only ever populate
 // that old entry's cache and can never overwrite what the UI reads for the
 // current key. (Wiring the signal through is also unsafe in this project's

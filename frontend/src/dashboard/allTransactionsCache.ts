@@ -44,6 +44,10 @@ function isSafeDisplayText(value: unknown): value is string | null {
   return isStringOrNull(value) && (value === null || !PAN_LIKE_SEQUENCE.test(value))
 }
 
+function isSafeRequiredDisplayText(value: unknown): value is string {
+  return typeof value === 'string' && !PAN_LIKE_SEQUENCE.test(value)
+}
+
 function isLastFourMask(value: unknown): value is string | null {
   return value === null || (typeof value === 'string' && LAST_FOUR_MASK.test(value))
 }
@@ -55,8 +59,8 @@ function isCardResponse(value: unknown): value is CardResponse {
     typeof value.connection_id === 'string' &&
     typeof value.bank === 'string' &&
     BANKS.has(value.bank) &&
-    isSafeDisplayText(value.bank_display_name) &&
-    isSafeDisplayText(value.name) &&
+    isSafeRequiredDisplayText(value.bank_display_name) &&
+    isSafeRequiredDisplayText(value.name) &&
     isSafeDisplayText(value.official_name) &&
     isLastFourMask(value.mask) &&
     typeof value.state === 'string' &&
