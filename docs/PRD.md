@@ -27,13 +27,13 @@ Provide one secure, fast, locally cached search experience that:
 2. Discovers every authorized credit card under each connection.
 3. Retrieves and incrementally maintains up to 730 days of available transactions.
 4. Searches merchant and statement text across all cards.
-5. Displays results in independently readable card panels on one page.
+5. Displays results in independently readable card panels on one page in **All cards**, with an alternate aggregate-table presentation in **All transactions**.
 
 ## 3. Product Principles
 
 - **Credentials stay with the bank.** The application uses OAuth-capable Plaid Link and never renders bank credential fields.
 - **Local data serves the interface.** Searches and card views read from SQLite, not directly from Plaid.
-- **One connection, many cards.** Plaid synchronization occurs once per Item and results are grouped by its credit-card accounts.
+- **One connection, many cards.** Plaid synchronization occurs once per Item; its results are grouped by credit-card account in **All cards** and remain available to the alternate **All transactions** presentation.
 - **Freshness is explicit.** Every card and bank connection shows its last successful synchronization time and health state.
 - **Partial failure is normal.** One unavailable institution does not block cached search or synchronization of other institutions.
 - **Trial capacity is scarce.** Production Item creation is deliberate because the Plaid Trial limit is cumulative and deleted Items do not restore capacity.
@@ -166,14 +166,14 @@ From the dashboard, the owner can select **All transactions** next to the fleet 
 
 ### 8.4 Search
 
-- **FR-SRCH-001:** The dashboard shall provide one visible search input and one visible Search button above the card grid.
+- **FR-SRCH-001:** The **All cards** dashboard view shall provide one visible search input and one visible Search button above the card grid. **All transactions** uses the same submitted search control as described in the [All Transactions View PRD](features/all-transactions-view/PRD.md).
 - **FR-SRCH-002:** Search shall run only on explicit submit or Enter; typing alone shall not issue API requests.
 - **FR-SRCH-003:** Leading and trailing whitespace shall be removed and case shall be ignored.
 - **FR-SRCH-004:** The entire submitted query shall match as a substring of merchant name, Plaid transaction name, or original statement description.
-- **FR-SRCH-005:** A blank query shall return recent transactions for every active card.
-- **FR-SRCH-006:** Results shall be grouped by card and sorted by transaction date descending, then provider transaction ID for deterministic ties.
-- **FR-SRCH-007:** The response shall include total matches, per-card match counts, the first page for every card, and an independent continuation cursor per card.
-- **FR-SRCH-008:** Additional rows shall be fetched only for the card whose list reaches its continuation threshold.
+- **FR-SRCH-005:** In **All cards**, a blank query shall return recent transactions for every active card. The blank-query behavior for **All transactions** is defined in the [All Transactions View PRD](features/all-transactions-view/PRD.md).
+- **FR-SRCH-006:** In **All cards**, results shall be grouped by card and sorted by transaction date descending, then provider transaction ID for deterministic ties.
+- **FR-SRCH-007:** In **All cards**, the response shall include total matches, per-card match counts, the first page for every card, and an independent continuation cursor per card.
+- **FR-SRCH-008:** In **All cards**, additional rows shall be fetched only for the card whose list reaches its continuation threshold. Aggregate ordering and continuation are defined in the [All Transactions View PRD](features/all-transactions-view/PRD.md).
 - **FR-SRCH-009:** The submitted term shall be highlighted in visible merchant and statement text without changing the stored data.
 - **FR-SRCH-010:** Search shall be parameterized and shall treat punctuation as text rather than query syntax.
 
