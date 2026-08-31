@@ -158,6 +158,9 @@ describe('all-transactions session cache', () => {
     ['description', '4111111111111111'],
     ['merchant_name', '4111 1111 1111 1111'],
     ['original_description', '4111-1111-1111-1111'],
+    ['description', '4111  1111  1111  1111'],
+    ['merchant_name', '4111\t1111\t1111\t1111'],
+    ['original_description', '4111\u00a01111\u00a01111\u00a01111'],
   ] as const)(
     'rejects a PAN-like value in transaction %s before persistence and hydration',
     (field, pan) => {
@@ -189,6 +192,26 @@ describe('all-transactions session cache', () => {
       expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
     },
   )
+
+  it('keeps ordinary shorter digit groups cacheable', () => {
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    const ordinaryResponse: AllTransactionsResponse = {
+      ...mergedResponse,
+      rows: [
+        {
+          ...mergedResponse.rows[0],
+          transaction: {
+            ...mergedResponse.rows[0].transaction,
+            description: 'Receipt 1234-5678-9012 accepted',
+          },
+        },
+      ],
+    }
+
+    persistAllTransactionsResult('owner-a', 'Paze', ordinaryResponse)
+
+    expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)?.data).toEqual(ordinaryResponse)
+  })
 
   it('rejects an entry whose embedded owner or query does not match its key scope', () => {
     window.sessionStorage.setItem(

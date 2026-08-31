@@ -22,7 +22,7 @@ type UnknownRecord = Record<string, unknown>
 
 const BANKS = new Set(['capital-one', 'chase', 'citi', 'wells-fargo'])
 const LAST_FOUR_MASK = /^\d{4}$/
-const PAN_LIKE_SEQUENCE = /(?<!\d)(?:\d[ -]?){12,18}\d(?!\d)/
+const PAN_LIKE_SEQUENCE = /(?<![0-9])(?:[0-9][\s-]*){12,18}[0-9](?![\s-]*[0-9])/u
 
 function normalizeQuery(query: string): string {
   return query.trim().toLocaleLowerCase()
