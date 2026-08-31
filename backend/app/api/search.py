@@ -9,6 +9,8 @@ from fastapi import APIRouter, Depends, Query, Request
 
 from app.dependencies import OwnerDep, SessionDep, SettingsDep
 from app.schemas import (
+    AllTransactionRow,
+    AllTransactionsResponse,
     CardResponse,
     CardTransactionGroup,
     GroupedSearchResponse,
@@ -17,8 +19,11 @@ from app.schemas import (
 from app.services.search_service import (
     DEFAULT_PER_CARD_LIMIT,
     MAX_PER_CARD_LIMIT,
+    AllTransactionRow as AllTransactionServiceRow,
     CardGroup,
+    CardRow,
     SearchService,
+    TransactionRow,
 )
 
 router = APIRouter(prefix="/api", tags=["search"])
@@ -35,36 +40,71 @@ ServiceDep = Depends(search_service_dep)
 
 def _serialize(group: CardGroup) -> CardTransactionGroup:
     return CardTransactionGroup(
-        card=CardResponse(
-            id=group.card.id,
-            connection_id=group.card.connection_id,
-            bank=group.card.bank,  # type: ignore[arg-type]
-            bank_display_name=group.card.bank_display_name,
-            name=group.card.name,
-            official_name=group.card.official_name,
-            mask=group.card.mask,
-            state="needs_attention" if group.card.last_error_code else "ready",
-            last_successful_sync_at=group.card.last_successful_sync_at,
-        ),
-        transactions=[
-            TransactionMatch(
-                id=row.id,
-                card_id=row.card_id,
-                merchant_name=row.merchant_name,
-                description=row.description,
-                original_description=row.original_description,
-                category=row.category,
-                amount_cents=row.amount_cents,
-                currency_code=row.currency_code,
-                authorized_date=row.authorized_date,
-                posted_date=row.posted_date,
-                pending=row.pending,
-            )
-            for row in group.transactions
-        ],
+        card=_card_response(group.card),
+        transactions=[_transaction_response(row) for row in group.transactions],
         match_count=group.match_count,
         next_cursor=group.next_cursor,
         has_more=group.has_more,
+    )
+
+
+def _card_response(card: CardRow) -> CardResponse:
+    return CardResponse(
+        id=card.id,
+        connection_id=card.connection_id,
+        bank=card.bank,  # type: ignore[arg-type]
+        bank_display_name=card.bank_display_name,
+        name=card.name,
+        official_name=card.official_name,
+        mask=card.mask,
+        state="needs_attention" if card.last_error_code else "ready",
+        last_successful_sync_at=card.last_successful_sync_at,
+    )
+
+
+def _transaction_response(row: TransactionRow) -> TransactionMatch:
+    return TransactionMatch(
+        id=row.id,
+        card_id=row.card_id,
+        merchant_name=row.merchant_name,
+        description=row.description,
+        original_description=row.original_description,
+        category=row.category,
+        amount_cents=row.amount_cents,
+        currency_code=row.currency_code,
+        authorized_date=row.authorized_date,
+        posted_date=row.posted_date,
+        pending=row.pending,
+    )
+
+
+def _serialize_all_row(row: AllTransactionServiceRow) -> AllTransactionRow:
+    return AllTransactionRow(
+        transaction=_transaction_response(row.transaction),
+        card=_card_response(row.card),
+    )
+
+
+@router.get("/transactions", response_model=AllTransactionsResponse)
+async def all_transactions(
+    owner: OwnerDep,
+    q: str = Query(default="", max_length=200),
+    cursor: str | None = Query(default=None),
+    limit: int = Query(default=MAX_PER_CARD_LIMIT, ge=1, le=MAX_PER_CARD_LIMIT),
+    service: SearchService = ServiceDep,
+) -> AllTransactionsResponse:
+    result = await service.all_transactions(
+        owner.id, query=q, limit=limit, cursor=cursor
+    )
+    return AllTransactionsResponse(
+        query=result.query,
+        total_matches=result.total_matches,
+        card_count=result.card_count,
+        bank_count=result.bank_count,
+        rows=[_serialize_all_row(row) for row in result.rows],
+        next_cursor=result.next_cursor,
+        has_more=result.has_more,
+        cache_as_of=result.cache_as_of,
     )
 
 

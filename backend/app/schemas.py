@@ -112,6 +112,22 @@ class TransactionMatch(BaseModel):
     pending: bool
 
 
+class AllTransactionRow(BaseModel):
+    transaction: TransactionMatch
+    card: CardResponse
+
+
+class AllTransactionsResponse(BaseModel):
+    query: str
+    total_matches: int
+    card_count: int
+    bank_count: int
+    rows: list[AllTransactionRow]
+    next_cursor: str | None
+    has_more: bool
+    cache_as_of: datetime | None
+
+
 class CardTransactionGroup(BaseModel):
     card: CardResponse
     transactions: list[TransactionMatch]
@@ -243,6 +259,8 @@ class TransactionLimitAlertListResponse(BaseModel):
 
 __all__ = [
     "BankConnectionResponse",
+    "AllTransactionRow",
+    "AllTransactionsResponse",
     "AllTimeWindow",
     "CardTransactionGroup",
     "GroupedSearchResponse",
