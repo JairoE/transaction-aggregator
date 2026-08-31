@@ -5,8 +5,14 @@ transactions across Capital One, Chase, Citi, and Wells Fargo from one search
 box. Connections go through Plaid; transactions are cached in local SQLite, so
 search never calls a bank and keeps working offline.
 
-One search field sits above a grid of card panels. Searching `Paze` returns
-every match while keeping the results grouped card by card.
+One search field sits above the default **All cards** grid of card panels.
+Searching `Paze` returns every match while keeping results grouped card by card;
+each card paginates independently and remains visible with an explicit zero-match
+state. The dashboard also includes an **All transactions** view for reviewing
+the same local cache in one globally ordered aggregate table. Switch views next
+to the fleet summary without changing the submitted query. See the
+[All Transactions View PRD](docs/features/all-transactions-view/PRD.md) for the
+full behavior and API contract.
 
 Transaction limitations add informational count alerts—never transaction
 blocking—evaluated entirely from the local cache. Rules can target every card

@@ -9,7 +9,7 @@
 
 Transaction Aggregator is a private, single-owner, local-first web application for searching credit-card transactions across Capital One, Chase, Citi, and Wells Fargo. The owner connects each institution through Plaid, authorizes multiple credit cards under each bank login, and searches cached transaction history from one dashboard.
 
-The defining experience is a single search field above a responsive grid. Each grid panel represents one credit card and contains its own transaction list. A search for `Paze`, for example, returns every matching transaction while preserving the card-by-card grouping.
+The defining experience is a single search field above the default **All cards** responsive grid. Each grid panel represents one credit card and contains its own transaction list. A search for `Paze`, for example, returns every matching transaction while preserving the card-by-card grouping, independent card pagination, and visible zero-match panels. The dashboard also offers an **All transactions** view that presents the same cached results in one aggregate table; see the [All Transactions View PRD](features/all-transactions-view/PRD.md) for its detailed contract.
 
 Plaid is the only financial-data provider in v1. The application never collects or stores bank usernames, passwords, or MFA responses. Bank authentication and consent happen in Plaid- and bank-hosted interfaces.
 
@@ -88,7 +88,7 @@ The Trial plan allows at most 10 production Items. An Item represents one end-us
 - Pending transactions when the institution supplies them.
 - Incremental synchronization, startup recovery, manual synchronization, and optional webhook triggers.
 - Keyword search across all cached credit-card transactions.
-- Card-by-card responsive result grid with separate list pagination and scrolling.
+- Card-by-card responsive result grid with separate list pagination and scrolling (the **All cards** view), plus the alternate **All transactions** aggregate-table view.
 - Connection health, synchronization freshness, consent renewal, and disconnect flows.
 - Local-first operation and a documented stable HTTPS callback/tunnel setup.
 
@@ -111,10 +111,14 @@ The Trial plan allows at most 10 production Items. An Item represents one end-us
 4. The owner authenticates on the bank-hosted OAuth screen and selects all desired credit cards.
 5. The application exchanges the returned public token server-side, encrypts the access token, records the Item, discovers credit-card accounts, and begins the initial synchronization.
 6. The connection card shows initial and historical loading progress without blocking other banks.
-7. After all desired banks are connected, the dashboard displays one panel per credit card.
-8. With no query, each panel shows recent cached transactions sorted newest first.
+7. After all desired banks are connected, the dashboard opens in **All cards**, displaying one panel per credit card.
+8. With no query, each panel shows recent cached transactions sorted newest first; each panel paginates independently.
 9. The owner types `Paze` and submits with the button or Enter.
 10. Every card remains visible, displays its match count, and lists only matching transactions. Cards with no matches show an explicit zero-result state.
+
+### Alternate aggregate-table journey
+
+From the dashboard, the owner can select **All transactions** next to the fleet summary. The URL records the selected view while preserving the submitted query, and the dashboard presents matching cached transactions from every active card in one globally sorted, paginated table with bank and masked-card context. Switching back to **All cards** restores the grouped-card presentation without changing synchronization, search semantics, or the local-first and owner-isolated security model. See the [All Transactions View PRD](features/all-transactions-view/PRD.md) for the full behavior and API contract.
 
 ## 8. Functional Requirements
 
