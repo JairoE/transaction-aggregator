@@ -17,7 +17,9 @@ from app.schemas import (
     TransactionMatch,
 )
 from app.services.search_service import (
+    DEFAULT_ALL_TRANSACTIONS_LIMIT,
     DEFAULT_PER_CARD_LIMIT,
+    MAX_ALL_TRANSACTIONS_LIMIT,
     MAX_PER_CARD_LIMIT,
     AllTransactionRow as AllTransactionServiceRow,
     CardGroup,
@@ -90,7 +92,11 @@ async def all_transactions(
     owner: OwnerDep,
     q: str = Query(default="", max_length=200),
     cursor: str | None = Query(default=None),
-    limit: int = Query(default=MAX_PER_CARD_LIMIT, ge=1, le=MAX_PER_CARD_LIMIT),
+    limit: int = Query(
+        default=DEFAULT_ALL_TRANSACTIONS_LIMIT,
+        ge=1,
+        le=MAX_ALL_TRANSACTIONS_LIMIT,
+    ),
     service: SearchService = ServiceDep,
 ) -> AllTransactionsResponse:
     result = await service.all_transactions(

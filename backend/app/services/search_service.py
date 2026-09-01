@@ -28,6 +28,8 @@ MAX_QUERY_LENGTH = 100
 TRIGRAM_MINIMUM = 3
 DEFAULT_PER_CARD_LIMIT = 25
 MAX_PER_CARD_LIMIT = 50
+DEFAULT_ALL_TRANSACTIONS_LIMIT = 50
+MAX_ALL_TRANSACTIONS_LIMIT = 50
 BANK_ORDER = {slug: index for index, slug in enumerate(SUPPORTED_BANKS)}
 
 
@@ -368,10 +370,10 @@ class SearchService:
         self,
         owner_id: str,
         query: str | None = None,
-        limit: int = MAX_PER_CARD_LIMIT,
+        limit: int = DEFAULT_ALL_TRANSACTIONS_LIMIT,
         cursor: str | None = None,
     ) -> AllTransactionsResult:
-        capped = max(1, min(limit, MAX_PER_CARD_LIMIT))
+        capped = max(1, min(limit, MAX_ALL_TRANSACTIONS_LIMIT))
         normalized = normalize_query(query)
         cards = await self.list_cards(owner_id)
         cache_as_of = _cache_as_of(cards)
@@ -528,7 +530,9 @@ def _cache_as_of(cards: list[CardRow]) -> datetime | None:
 
 
 __all__ = [
+    "DEFAULT_ALL_TRANSACTIONS_LIMIT",
     "DEFAULT_PER_CARD_LIMIT",
+    "MAX_ALL_TRANSACTIONS_LIMIT",
     "MAX_PER_CARD_LIMIT",
     "AggregateCursorCodec",
     "AllTransactionRow",

@@ -20,9 +20,15 @@ export const DEFAULT_PER_CARD_LIMIT = 25
 export const MAX_PER_CARD_LIMIT = 50
 /** Matches the backend's aggregate transaction default. */
 export const DEFAULT_ALL_TRANSACTIONS_LIMIT = 50
+/** The backend rejects aggregate limits above this with a 422. */
+export const MAX_ALL_TRANSACTIONS_LIMIT = 50
 
 function clampLimit(limit: number): number {
   return Math.min(Math.max(1, Math.trunc(limit)), MAX_PER_CARD_LIMIT)
+}
+
+function clampAllTransactionsLimit(limit: number): number {
+  return Math.min(Math.max(1, Math.trunc(limit)), MAX_ALL_TRANSACTIONS_LIMIT)
 }
 
 // Note: these deliberately do NOT forward TanStack Query's queryFn
@@ -78,6 +84,6 @@ export function fetchAllTransactions(
   if (cursor) {
     params.set('cursor', cursor)
   }
-  params.set('limit', String(clampLimit(limit)))
+  params.set('limit', String(clampAllTransactionsLimit(limit)))
   return apiClient.request<AllTransactionsResponse>(`/api/transactions?${params.toString()}`)
 }
