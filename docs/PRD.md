@@ -1,8 +1,8 @@
 # Transaction Aggregator Project Requirements Document
 
 - **Status:** Approved for implementation planning
-- **Version:** 1.0
-- **Date:** August 18, 2026
+- **Version:** 1.1
+- **Date:** September 3, 2026
 - **Audience:** Product owner, designers, implementers, and reviewers
 
 ## 1. Executive Summary
@@ -10,6 +10,8 @@
 Transaction Aggregator is a private, single-owner, local-first web application for searching credit-card transactions across Capital One, Chase, Citi, and Wells Fargo. The owner connects each institution through Plaid, authorizes multiple credit cards under each bank login, and searches cached transaction history from one dashboard.
 
 The defining experience is a single search field above the default **All cards** responsive grid. Each grid panel represents one credit card and contains its own transaction list. A search for `Paze`, for example, returns every matching transaction while preserving the card-by-card grouping, independent card pagination, and visible zero-match panels. The dashboard also offers an **All transactions** view that presents the same cached results in one aggregate table; see the [All Transactions View PRD](features/all-transactions-view/PRD.md) for its detailed contract.
+
+The dashboard will also offer one durable **Check for new transactions** action across both views. Its approved product, provider, recovery, and scale contracts are defined in the [Refresh Transactions Button PRD](features/refresh-transactions/PRD.md).
 
 Plaid is the only financial-data provider in v1. The application never collects or stores bank usernames, passwords, or MFA responses. Bank authentication and consent happen in Plaid- and bank-hosted interfaces.
 
@@ -87,6 +89,7 @@ The Trial plan allows at most 10 production Items. An Item represents one end-us
 - Credit-card transaction history requested up to 730 days.
 - Pending transactions when the institution supplies them.
 - Incremental synchronization, startup recovery, manual synchronization, and optional webhook triggers.
+- A durable, fleet-level dashboard action for an on-demand provider refresh followed by local cursor synchronization.
 - Keyword search across all cached credit-card transactions.
 - Card-by-card responsive result grid with separate list pagination and scrolling (the **All cards** view), plus the alternate **All transactions** aggregate-table view.
 - Connection health, synchronization freshness, consent renewal, and disconnect flows.
@@ -159,10 +162,13 @@ From the dashboard, the owner can select **All transactions** next to the fleet 
 - **FR-SYNC-009:** A verified `SYNC_UPDATES_AVAILABLE` webhook shall enqueue, not directly execute, a synchronization job and return within 10 seconds.
 - **FR-SYNC-010:** Missing webhooks shall not affect correctness; the next startup or scheduled synchronization shall consume all cursor updates.
 - **FR-SYNC-011:** A manual Sync action shall deduplicate against an already queued or running job for the same Item.
-- **FR-SYNC-012:** Manual provider refresh shall be best-effort, rate-limited per Item, and disabled after Plaid reports that the capability is unsupported.
+- **FR-SYNC-012:** On-demand provider refresh shall be durable, rate-limited per Item, and disabled after Plaid reports that the capability is unsupported; the detailed contract is defined in the [Refresh Transactions Button PRD](features/refresh-transactions/PRD.md).
 - **FR-SYNC-013:** The UI shall distinguish local sync completion from Plaid's last successful provider update.
 - **FR-SYNC-014a:** The owner-facing stale indicator shall use a longer window than the enqueue threshold, so a connection that scheduled synchronization is still expected to recover shall not be surfaced as needing attention.
 - **FR-SYNC-014:** Initial history loading shall show recent data as it becomes available and continue historical backfill without blanking the dashboard.
+- **FR-SYNC-015:** The dashboard shall provide one owner-scoped **Check for new transactions** action across both dashboard views as specified in the [Refresh Transactions Button PRD](features/refresh-transactions/PRD.md).
+- **FR-SYNC-016:** On-demand provider refresh shall be queued, idempotent, cooldown-aware, recoverable after process failure, and followed by local cursor synchronization without waiting for a webhook.
+- **FR-SYNC-017:** A completed fleet refresh shall invalidate both grouped-card and aggregate-table transaction state without discarding last-known-good cached data on a failed refetch.
 
 ### 8.4 Search
 
@@ -205,6 +211,9 @@ From the dashboard, the owner can select **All transactions** next to the fleet 
 | Transaction | Locally searchable transaction | Plaid transaction ID, card ID, dates, descriptions, amount, currency, pending state, normalized search text |
 | Sync Job | Durable request to synchronize an Item | Connection ID, trigger, state, attempts, run time, error |
 | Sync Run | Audit record for one attempt | Starting/ending cursors, counts, timestamps, outcome |
+| Transaction Refresh | Durable owner request to check all active Items | Owner ID, state, timestamps, expiry |
+| Transaction Refresh Request | Idempotent create-request mapping | Owner ID, idempotency-key hash, refresh ID, expiry |
+| Transaction Refresh Target | Per-Item provider-refresh and sync outcome | Refresh ID, connection ID, attempt state, required sync generation, counts, error |
 | Webhook Receipt | Deduplication and audit record | Payload hash, webhook type/code, received time |
 
 Plaid transaction IDs and account IDs are external identifiers, not display-safe secrets. Access tokens are secrets and shall only be available as decrypted values inside the backend Plaid client call boundary.
