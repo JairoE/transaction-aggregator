@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -6,24 +6,63 @@ import { connectionsQueryOptions } from '../connections/ConnectionsPage'
 import { AppShell } from '../shell/AppShell'
 import { DotIcon } from '../shell/icons'
 import { useOnlineStatus } from '../shell/useOnlineStatus'
+import { fetchTransactionLimitAlerts, TRANSACTION_LIMIT_ALERTS_QUERY_KEY } from '../limitations/api'
+import { AllTransactionsTable } from './AllTransactionsTable'
+import {
+  persistAllTransactionsResult,
+  readPersistedAllTransactionsResult,
+} from './allTransactionsCache'
+import {
+  fetchAllTransactions,
+  fetchCardTransactions,
+  fetchTransactionSearch,
+  type AllTransactionRow,
+} from './api'
 import { CacheStatusBanner } from './CacheStatusBanner'
 import { CardGrid, type DashboardCardGroup } from './CardGrid'
-import { SearchBar } from './SearchBar'
-import { SearchQueryProvider } from './SearchContext'
-import { fetchCardTransactions, fetchTransactionSearch } from './api'
+import { DashboardViewToggle, type DashboardView } from './DashboardViewToggle'
 import { buildFleetSummary, buildResultsSummary, formatSyncStatus } from './format'
 import { persistSearchResult, readPersistedSearchResult } from './searchCache'
 import { recordSearchHistory } from './searchHistory'
-import {
-  fetchTransactionLimitAlerts,
-  TRANSACTION_LIMIT_ALERTS_QUERY_KEY,
-} from '../limitations/api'
+import { SearchBar } from './SearchBar'
+import { SearchQueryProvider } from './SearchContext'
 
 interface CardPageState {
-  /** Transactions appended by "Load more" clicks, beyond the base page. */
   extraTransactions: DashboardCardGroup['transactions']
   cursor: string | null
   hasMore: boolean
+}
+
+interface AggregatePageState {
+  query: string
+  rows: AllTransactionRow[]
+  cursor: string | null
+  hasMore: boolean
+}
+
+interface CardLoadMoreVariables {
+  cardId: string
+  query: string
+  generation: number
+}
+
+interface AggregateLoadMoreVariables {
+  query: string
+  cursor: string
+  generation: number
+}
+
+function resolveView(value: string | null): DashboardView {
+  return value === 'transactions' ? 'transactions' : 'cards'
+}
+
+function uniqueRows(rows: AllTransactionRow[]): AllTransactionRow[] {
+  const ids = new Set<string>()
+  return rows.filter((row) => {
+    if (ids.has(row.transaction.id)) return false
+    ids.add(row.transaction.id)
+    return true
+  })
 }
 
 export function DashboardPage() {
@@ -31,111 +70,192 @@ export function DashboardPage() {
   const isOnline = useOnlineStatus()
   const [searchParams, setSearchParams] = useSearchParams()
   const submittedQuery = searchParams.get('q')?.trim() ?? ''
+  const view = resolveView(searchParams.get('view'))
   const [pageState, setPageState] = useState<Record<string, CardPageState>>({})
+  const [aggregatePage, setAggregatePage] = useState<AggregatePageState | null>(null)
+  const continuationScopeKey = `${view}\u0000${submittedQuery}`
+  const continuationScopeRef = useRef({ key: continuationScopeKey, generation: 0 })
+  if (continuationScopeRef.current.key !== continuationScopeKey) {
+    continuationScopeRef.current = {
+      key: continuationScopeKey,
+      generation: continuationScopeRef.current.generation + 1,
+    }
+  }
+  const continuationGeneration = continuationScopeRef.current.generation
 
-  // Connection health for `CacheStatusBanner`. Shares its query key with
-  // `ConnectionsPage` so navigating between the two screens doesn't
-  // duplicate the request.
   const connectionsQuery = useQuery(connectionsQueryOptions)
-
   const searchQuery = useQuery({
-    queryKey: ['transactions', 'search', submittedQuery] as const,
+    queryKey: ['transactions', 'search', owner?.id ?? null, submittedQuery] as const,
     queryFn: () => fetchTransactionSearch(submittedQuery),
     placeholderData: keepPreviousData,
-    // Offline: don't attempt a doomed fetch — fall back to whatever is
-    // already cached (in memory, or hydrated below from sessionStorage)
-    // and let the `online` event re-enable fetching automatically.
-    enabled: isOnline,
+    enabled: isOnline && view === 'cards',
     initialData: () =>
       owner ? readPersistedSearchResult(owner.id, submittedQuery)?.data : undefined,
     initialDataUpdatedAt: () =>
       owner ? readPersistedSearchResult(owner.id, submittedQuery)?.cachedAt : undefined,
   })
-
+  const allTransactionsQuery = useQuery({
+    queryKey: ['transactions', 'all', owner?.id ?? null, submittedQuery] as const,
+    queryFn: () => fetchAllTransactions(submittedQuery, null),
+    enabled: isOnline && view === 'transactions',
+    initialData: () =>
+      owner ? readPersistedAllTransactionsResult(owner.id, submittedQuery)?.data : undefined,
+    initialDataUpdatedAt: () =>
+      owner ? readPersistedAllTransactionsResult(owner.id, submittedQuery)?.cachedAt : undefined,
+  })
   const limitationAlertsQuery = useQuery({
     queryKey: TRANSACTION_LIMIT_ALERTS_QUERY_KEY,
     queryFn: fetchTransactionLimitAlerts,
+    enabled: view === 'cards',
     refetchInterval: 60_000,
     refetchOnWindowFocus: true,
     refetchIntervalInBackground: false,
   })
 
-  // Persist every successful search result to sessionStorage (see
-  // `./searchCache.ts`) so a reload — or simply going offline — still has
-  // last-known-good rows to show instead of a blank/loading dashboard.
   useEffect(() => {
     if (owner && searchQuery.isSuccess && searchQuery.data) {
       persistSearchResult(owner.id, submittedQuery, searchQuery.data)
     }
   }, [owner, searchQuery.isSuccess, searchQuery.data, submittedQuery])
 
-  // A newly submitted search — including an empty one that restores recent
-  // cached transactions — resets every card's pagination state so no stale
-  // cursor or appended page survives the resubmission.
+  // Submitted query and view both delimit a pagination sequence. Clearing this
+  // state prevents a late or old continuation page from crossing that boundary.
   useEffect(() => {
     setPageState({})
-  }, [submittedQuery])
+    setAggregatePage(null)
+  }, [submittedQuery, view])
 
   const loadMoreMutation = useMutation({
-    mutationFn: async (cardId: string) => {
+    mutationFn: async ({ cardId, query, generation }: CardLoadMoreVariables) => {
       const baseGroup = searchQuery.data?.groups.find((group) => group.card.id === cardId)
-      const currentCursor = pageState[cardId]?.cursor ?? baseGroup?.next_cursor ?? null
-      const group = await fetchCardTransactions(cardId, submittedQuery, currentCursor)
-      return { cardId, group }
+      const cursor = pageState[cardId]?.cursor ?? baseGroup?.next_cursor ?? null
+      return {
+        cardId,
+        query,
+        generation,
+        group: await fetchCardTransactions(cardId, query, cursor),
+      }
     },
-    onSuccess: ({ cardId, group }) => {
-      setPageState((prev) => ({
-        ...prev,
+    onSuccess: ({ cardId, query, generation, group }) => {
+      if (query !== submittedQuery || view !== 'cards' || generation !== continuationGeneration) return
+      setPageState((previous) => ({
+        ...previous,
         [cardId]: {
-          extraTransactions: [...(prev[cardId]?.extraTransactions ?? []), ...group.transactions],
+          extraTransactions: [...(previous[cardId]?.extraTransactions ?? []), ...group.transactions],
           cursor: group.next_cursor,
           hasMore: group.has_more,
         },
       }))
     },
   })
+  const aggregateMoreMutation = useMutation({
+    mutationFn: ({ query, cursor }: AggregateLoadMoreVariables) =>
+      fetchAllTransactions(query, cursor),
+    onSuccess: (page, variables) => {
+      if (
+        variables.query !== submittedQuery ||
+        view !== 'transactions' ||
+        variables.generation !== continuationGeneration
+      ) return
+      setAggregatePage((previous) => {
+        const baseRows = allTransactionsQuery.data?.rows ?? []
+        const previousRows = previous?.query === variables.query ? previous.rows : []
+        const allRows = uniqueRows([...baseRows, ...previousRows, ...page.rows])
+        return {
+          query: variables.query,
+          rows: allRows.filter(
+            (row) => !baseRows.some((base) => base.transaction.id === row.transaction.id),
+          ),
+          cursor: page.next_cursor,
+          hasMore: page.has_more,
+        }
+      })
+    },
+  })
 
-  const pendingCardId = loadMoreMutation.isPending ? (loadMoreMutation.variables ?? null) : null
+  useEffect(() => {
+    aggregateMoreMutation.reset()
+  }, [submittedQuery, view])
 
-  const groups = useMemo<DashboardCardGroup[]>(() => {
-    return (searchQuery.data?.groups ?? []).map((group) => {
-      const extra = pageState[group.card.id]
-      const merged = extra
-        ? {
-            ...group,
-            transactions: [...group.transactions, ...extra.extraTransactions],
-            next_cursor: extra.cursor,
-            has_more: extra.hasMore,
-          }
-        : group
-      return {
-        ...merged,
-        isLoadingMore: pendingCardId === group.card.id,
-        limitationAlerts: (limitationAlertsQuery.data?.alerts ?? []).filter(
-          (alert) => alert.card.id === group.card.id,
-        ),
-      }
-    })
-  }, [searchQuery.data, pageState, pendingCardId, limitationAlertsQuery.data])
-
-  const cardCount = searchQuery.data?.card_count ?? 0
-  const bankCount = useMemo(
-    () => new Set((searchQuery.data?.groups ?? []).map((group) => group.card.bank)).size,
-    [searchQuery.data],
+  const pendingCardId = loadMoreMutation.isPending ? (loadMoreMutation.variables?.cardId ?? null) : null
+  const groups = useMemo<DashboardCardGroup[]>(
+    () =>
+      (searchQuery.data?.groups ?? []).map((group) => {
+        const extra = pageState[group.card.id]
+        const merged = extra
+          ? {
+              ...group,
+              transactions: [...group.transactions, ...extra.extraTransactions],
+              next_cursor: extra.cursor,
+              has_more: extra.hasMore,
+            }
+          : group
+        return {
+          ...merged,
+          isLoadingMore: pendingCardId === group.card.id,
+          limitationAlerts: (limitationAlertsQuery.data?.alerts ?? []).filter(
+            (alert) => alert.card.id === group.card.id,
+          ),
+        }
+      }),
+    [searchQuery.data, pageState, pendingCardId, limitationAlertsQuery.data],
   )
-  const hasQuery = submittedQuery.trim().length > 0
-  const statusPillText = formatSyncStatus(searchQuery.data?.cache_as_of ?? null)
+
+  const aggregateData = useMemo(() => {
+    const base = allTransactionsQuery.data
+    if (!base || !aggregatePage || aggregatePage.query !== submittedQuery) return base
+    return {
+      ...base,
+      rows: uniqueRows([...base.rows, ...aggregatePage.rows]),
+      next_cursor: aggregatePage.cursor,
+      has_more: aggregatePage.hasMore,
+    }
+  }, [allTransactionsQuery.data, aggregatePage, submittedQuery])
+
+  const connectionFleet = useMemo(() => {
+    const representedBanks = (connectionsQuery.data?.banks ?? []).filter(
+      (bank) => bank.connected && bank.card_count > 0,
+    )
+    return {
+      cardCount: representedBanks.reduce((total, bank) => total + bank.card_count, 0),
+      bankCount: representedBanks.length,
+    }
+  }, [connectionsQuery.data])
+
+  useEffect(() => {
+    if (owner && allTransactionsQuery.isSuccess && aggregateData) {
+      persistAllTransactionsResult(owner.id, submittedQuery, aggregateData)
+    }
+  }, [owner, allTransactionsQuery.isSuccess, aggregateData, submittedQuery])
+
+  const activeData = view === 'cards' ? searchQuery.data : aggregateData
+  const cardCount = activeData?.card_count ?? connectionFleet.cardCount
+  const bankCount =
+    view === 'cards'
+      ? searchQuery.data
+        ? new Set(searchQuery.data.groups.map((group) => group.card.bank)).size
+        : connectionFleet.bankCount
+      : (aggregateData?.bank_count ?? connectionFleet.bankCount)
+  const hasQuery = submittedQuery.length > 0
+  const activeIsFetching = view === 'cards' ? searchQuery.isFetching : allTransactionsQuery.isFetching
+  const statusPillText = formatSyncStatus(activeData?.cache_as_of ?? null)
 
   function handleSearchSubmit(query: string) {
-    if (owner) {
-      recordSearchHistory(owner.id, query)
-    }
-    setSearchParams(query ? { q: query } : {}, { replace: true })
+    if (owner) recordSearchHistory(owner.id, query)
+    const next = new URLSearchParams(searchParams)
+    if (query) next.set('q', query)
+    else next.delete('q')
+    setSearchParams(next, { replace: true })
   }
 
-  if (!owner) {
-    return null
+  function handleViewChange(nextView: DashboardView) {
+    const next = new URLSearchParams(searchParams)
+    if (nextView === 'transactions') next.set('view', 'transactions')
+    else next.delete('view')
+    setSearchParams(next)
   }
+
+  if (!owner) return null
 
   return (
     <AppShell
@@ -144,33 +264,47 @@ export function DashboardPage() {
       actionLink={{ label: 'Manage connections', to: '/connections' }}
     >
       <main className="dashboard-page">
-        <p className="eyebrow">{buildFleetSummary(cardCount, bankCount)}</p>
-        <h1>{hasQuery ? 'Search results' : 'Your credit cards'}</h1>
+        <div className="dashboard-page__view-row">
+          <p className="eyebrow">{buildFleetSummary(cardCount, bankCount)}</p>
+          <DashboardViewToggle view={view} onChange={handleViewChange} />
+        </div>
+        <h1>
+          {hasQuery
+            ? 'Search results'
+            : view === 'transactions'
+              ? 'All transactions'
+              : 'Your credit cards'}
+        </h1>
         <p>
           {hasQuery
-            ? 'Every matching transaction remains grouped by card.'
-            : 'All connected cards are loaded and ready to search.'}
+            ? view === 'transactions'
+              ? 'Every matching transaction is combined in one table.'
+              : 'Every matching transaction remains grouped by card.'
+            : view === 'transactions'
+              ? 'Review cached transactions across every connected card.'
+              : 'All connected cards are loaded and ready to search.'}
         </p>
 
         <SearchBar
           initialQuery={submittedQuery}
-          pending={searchQuery.isFetching}
+          pending={activeIsFetching}
           onSubmit={handleSearchSubmit}
         />
 
         <CacheStatusBanner
           banks={connectionsQuery.data?.banks ?? []}
-          cacheAsOf={searchQuery.data?.cache_as_of ?? null}
+          cacheAsOf={activeData?.cache_as_of ?? null}
           isOnline={isOnline}
         />
 
-        {limitationAlertsQuery.isError && (
+        {view === 'cards' && limitationAlertsQuery.isError && (
           <p
             className="dashboard-page__alert-status"
             role="status"
             aria-label="Transaction limit alerts"
           >
-            Transaction limit alerts are temporarily unavailable. Your cards and transactions are still available.
+            Transaction limit alerts are temporarily unavailable. Your cards and transactions
+            are still available.
           </p>
         )}
 
@@ -178,8 +312,10 @@ export function DashboardPage() {
           <p className="dashboard-page__meta-text">
             <DotIcon />
             {hasQuery
-              ? buildResultsSummary(submittedQuery, searchQuery.data?.total_matches ?? 0, cardCount)
-              : 'Showing recent cached transactions on every card'}
+              ? buildResultsSummary(submittedQuery, activeData?.total_matches ?? 0, cardCount)
+              : view === 'transactions'
+                ? 'Showing recent cached transactions across all cards'
+                : 'Showing recent cached transactions on every card'}
           </p>
           {hasQuery ? (
             <button
@@ -194,14 +330,51 @@ export function DashboardPage() {
           )}
         </div>
 
-        {searchQuery.isPending ? (
-          <p role="status">Loading your cards…</p>
-        ) : searchQuery.isError ? (
-          <p role="alert">We could not load your cards. Try again.</p>
+        {view === 'cards' ? (
+          searchQuery.isPending ? (
+            <p role="status">Loading your cards…</p>
+          ) : searchQuery.isError ? (
+            <p role="alert">We could not load your cards. Try again.</p>
+          ) : (
+            <SearchQueryProvider value={submittedQuery}>
+              <CardGrid
+                groups={groups}
+                onLoadMore={(cardId) =>
+                  loadMoreMutation.mutate({
+                    cardId,
+                    query: submittedQuery,
+                    generation: continuationGeneration,
+                  })
+                }
+              />
+            </SearchQueryProvider>
+          )
+        ) : allTransactionsQuery.isPending && !aggregateData ? (
+          <p role="status">Loading transactions…</p>
         ) : (
-          <SearchQueryProvider value={submittedQuery}>
-            <CardGrid groups={groups} onLoadMore={(cardId) => loadMoreMutation.mutate(cardId)} />
-          </SearchQueryProvider>
+          <AllTransactionsTable
+            query={submittedQuery}
+            rows={aggregateData?.rows ?? []}
+            cardCount={cardCount}
+            hasMore={aggregateData?.has_more ?? false}
+            isLoadingMore={aggregateMoreMutation.isPending}
+            continuationError={aggregateMoreMutation.isError}
+            initialError={allTransactionsQuery.isError && !aggregateData}
+            canRetryInitial={isOnline}
+            onRetryInitial={() => {
+              if (isOnline) void allTransactionsQuery.refetch()
+            }}
+            onLoadMore={() => {
+              const cursor = aggregateData?.next_cursor
+              if (cursor && !aggregateMoreMutation.isPending) {
+                aggregateMoreMutation.mutate({
+                  query: submittedQuery,
+                  cursor,
+                  generation: continuationGeneration,
+                })
+              }
+            }}
+          />
         )}
       </main>
     </AppShell>

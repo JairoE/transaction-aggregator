@@ -261,6 +261,23 @@ export interface paths {
         patch: operations["update_transaction_limitation_api_transaction_limitations__rule_id__patch"];
         trace?: never;
     };
+    "/api/transactions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** All Transactions */
+        get: operations["all_transactions_api_transactions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions/search": {
         parameters: {
             query?: never;
@@ -306,6 +323,30 @@ export interface components {
              * @enum {string}
              */
             type: "all_time";
+        };
+        /** AllTransactionRow */
+        AllTransactionRow: {
+            card: components["schemas"]["CardResponse"];
+            transaction: components["schemas"]["TransactionMatch"];
+        };
+        /** AllTransactionsResponse */
+        AllTransactionsResponse: {
+            /** Bank Count */
+            bank_count: number;
+            /** Cache As Of */
+            cache_as_of: string | null;
+            /** Card Count */
+            card_count: number;
+            /** Has More */
+            has_more: boolean;
+            /** Next Cursor */
+            next_cursor: string | null;
+            /** Query */
+            query: string;
+            /** Rows */
+            rows: components["schemas"]["AllTransactionRow"][];
+            /** Total Matches */
+            total_matches: number;
         };
         /** BankConnectionResponse */
         BankConnectionResponse: {
@@ -1247,6 +1288,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionLimitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    all_transactions_api_transactions_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                cursor?: string | null;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllTransactionsResponse"];
                 };
             };
             /** @description Validation Error */

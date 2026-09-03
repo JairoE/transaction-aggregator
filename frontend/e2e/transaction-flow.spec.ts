@@ -84,10 +84,51 @@ async function expectNoHorizontalOverflow(page: Page): Promise<void> {
         bounds.width > 0 &&
         bounds.height > 0
       const isScreenReaderOnly = htmlElement.closest('.sr-only') !== null
+      const isContainedByHorizontalScroller = (() => {
+        let ancestor = htmlElement.parentElement
+        while (ancestor) {
+          const ancestorStyles = getComputedStyle(ancestor)
+          const ancestorBounds = ancestor.getBoundingClientRect()
+          const clipsHorizontally = /(?:auto|scroll)/.test(ancestorStyles.overflowX)
+          const ownsHorizontalOverflow = ancestor.scrollWidth > ancestor.clientWidth + 1
+          const hasEscapingPositionedAncestor = (() => {
+            let positionedElement: HTMLElement | null = htmlElement
+            while (positionedElement && positionedElement !== ancestor) {
+              const positionedStyles = getComputedStyle(positionedElement)
+              if (positionedStyles.position === 'fixed') {
+                return true
+              }
+              if (positionedStyles.position === 'absolute') {
+                const positionedBounds = positionedElement.getBoundingClientRect()
+                if (
+                  positionedBounds.right <= ancestorBounds.left - 0.5 ||
+                  positionedBounds.left >= ancestorBounds.right + 0.5
+                ) {
+                  return true
+                }
+              }
+              positionedElement = positionedElement.parentElement
+            }
+            return false
+          })()
+          if (
+            clipsHorizontally &&
+            ownsHorizontalOverflow &&
+            !hasEscapingPositionedAncestor &&
+            ancestorBounds.left >= -0.5 &&
+            ancestorBounds.right <= viewportWidth + 0.5
+          ) {
+            return true
+          }
+          ancestor = ancestor.parentElement
+        }
+        return false
+      })()
 
       if (
         !isRendered ||
         isScreenReaderOnly ||
+        isContainedByHorizontalScroller ||
         (bounds.left >= -0.5 && bounds.right <= viewportWidth + 0.5)
       ) {
         return []
@@ -232,6 +273,34 @@ test('owner connects four banks and searches every card at once', async ({ page 
     ).toBeVisible()
   }
 
+  // The aggregate view is keyboard-operable and keeps every card's identity
+  // in the semantic seven-column table.
+  const allCardsView = page.getByRole('button', { name: 'All cards' })
+  const allTransactionsView = page.getByRole('button', { name: 'All transactions' })
+  await allCardsView.focus()
+  await page.keyboard.press('Enter')
+  await expect(allCardsView).toHaveAttribute('aria-pressed', 'true')
+  await page.keyboard.press('Tab')
+  await expect(allTransactionsView).toBeFocused()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/dashboard\?view=transactions$/)
+  await expect(allTransactionsView).toHaveAttribute('aria-pressed', 'true')
+
+  const aggregateTable = page.getByRole('table', { name: /transactions across all cards/i })
+  await expect(aggregateTable).toBeVisible()
+  await expect(aggregateTable.getByRole('columnheader')).toHaveCount(7)
+  for (const bank of BANKS) {
+    await expect(aggregateTable).toContainText(bank)
+  }
+  for (const mask of EXPECTED_MASKS) {
+    await expect(aggregateTable).toContainText(`•••• ${mask}`)
+  }
+
+  await allCardsView.focus()
+  await page.keyboard.press('Space')
+  await expect(page).toHaveURL(/\/dashboard$/)
+  await expect(allCardsView).toHaveAttribute('aria-pressed', 'true')
+
   // Typing alone must not search.
   const search = page.getByRole('searchbox', { name: /Search transactions/i })
   await search.fill('Paze')
@@ -249,6 +318,18 @@ test('owner connects four banks and searches every card at once', async ({ page 
     ).toBeVisible()
   }
   await expect(page.getByText(/^Paze · Urban Market$/)).toBeVisible()
+
+  // Aggregate search uses the same submitted query and preserves it when the
+  // owner returns to the card grid.
+  await allTransactionsView.focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(/\/dashboard\?q=Paze&view=transactions$/)
+  await expect(page.getByRole('table', { name: /transactions across all cards/i })).toBeVisible()
+  await expect(page.getByText('10 matches for “Paze” across 8 cards')).toBeVisible()
+  await allCardsView.focus()
+  await page.keyboard.press('Space')
+  await expect(page).toHaveURL(/\/dashboard\?q=Paze$/)
+  await expect(page.getByRole('heading', { name: 'Search results' })).toBeVisible()
 
   await expectNoHorizontalOverflow(page)
 
@@ -278,7 +359,52 @@ test('dashboard keeps every visible element inside a narrow mobile device', asyn
   await page.goto('/dashboard')
   await expect(page.getByRole('img', { name: /card ending in/i }).first()).toBeVisible()
 
+  await page.getByRole('button', { name: 'All transactions' }).click()
+  await expect(page).toHaveURL(/\/dashboard\?view=transactions$/)
+  const tableScroll = page.getByRole('region', { name: 'Scrollable transactions table' })
+  await expect(tableScroll).toBeVisible()
+  const dimensions = await tableScroll.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+    overflowX: getComputedStyle(element).overflowX,
+  }))
+  expect(dimensions.overflowX, 'table owns a horizontal scroll region').toMatch(/^(auto|scroll)$/)
+  expect(dimensions.scrollWidth, 'table keeps its readable width inside a scroll region').toBeGreaterThanOrEqual(
+    dimensions.clientWidth,
+  )
+
   await expectNoHorizontalOverflow(page)
+})
+
+test('overflow checks do not trust a computed scroller without horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 300 })
+
+  // overflow-y: auto computes overflow-x to auto in CSSOM, but this fixed
+  // child cannot contribute to the ancestor's horizontal scroll range.
+  await page.evaluate(() => {
+    document.body.innerHTML = `
+      <div id="false-scroll" style="width: 120px; height: 40px; overflow-y: auto;">
+        <div style="height: 20px;">No horizontal content</div>
+        <div style="position: fixed; left: 330px; top: 0; width: 80px; height: 20px;">Escapes</div>
+      </div>
+    `
+  })
+  await expect(expectNoHorizontalOverflow(page)).rejects.toThrow('visible elements must stay within the device width')
+})
+
+test('overflow checks do not exempt fixed descendants from a real scroller', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 300 })
+  // A real horizontal scroller must still reject a fixed descendant that is
+  // geometrically outside its scrollable content.
+  await page.evaluate(() => {
+    document.body.innerHTML = `
+      <div id="real-scroll" style="width: 120px; height: 40px; overflow-x: auto;">
+        <div style="width: 500px; height: 20px;">Scrollable content</div>
+        <div style="position: fixed; left: 330px; top: 30px; width: 80px; height: 20px;">Escapes</div>
+      </div>
+    `
+  })
+  await expect(expectNoHorizontalOverflow(page)).rejects.toThrow('visible elements must stay within the device width')
 })
 
 test('every outlined card keeps its small accent label at AA contrast', async ({ page }) => {

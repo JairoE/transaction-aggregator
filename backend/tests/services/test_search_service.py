@@ -1,11 +1,43 @@
 from __future__ import annotations
 
 import time
+from datetime import UTC, date, datetime
 
 import pytest
+from sqlalchemy import select
 
 from app.errors import AppError
-from app.services.search_service import normalize_query
+from app.models import BankConnection, CardAccount, Owner, Transaction
+from app.services.search_service import AggregateCursorCodec, normalize_query
+
+
+async def _add_transaction(
+    db_session,
+    *,
+    transaction_id: str,
+    card_id: str,
+    search_text: str,
+    posted_date: date | None = None,
+    authorized_date: date | None = None,
+) -> None:
+    db_session.add(
+        Transaction(
+            id=transaction_id,
+            plaid_transaction_id=f"plaid-{transaction_id}",
+            card_account_id=card_id,
+            posted_date=posted_date,
+            authorized_date=authorized_date,
+            merchant_name=search_text,
+            name=search_text,
+            original_description=None,
+            category="Shopping",
+            amount_cents=100,
+            currency_code="USD",
+            pending=False,
+            search_text=search_text.casefold(),
+        )
+    )
+    await db_session.commit()
 
 
 async def test_blank_query_returns_recent_transactions_for_every_card(
@@ -226,3 +258,290 @@ async def test_search_over_fifty_thousand_rows_stays_under_250ms(
     p95 = timings[int(len(timings) * 0.95) - 1]
     assert result.total_matches == 10
     assert p95 < 250, f"p95 was {p95:.1f} ms over 50k rows"
+
+
+async def test_all_transactions_returns_one_global_newest_first_page(
+    search_service, eight_card_owner, db_session
+) -> None:
+    cards = (await search_service.list_cards(eight_card_owner.id))[:3]
+    await _add_transaction(
+        db_session,
+        transaction_id="aggregate-newest",
+        card_id=cards[0].id,
+        search_text="Aggregate Ordering Sentinel",
+        posted_date=date(2026, 9, 3),
+    )
+    await _add_transaction(
+        db_session,
+        transaction_id="aggregate-middle",
+        card_id=cards[1].id,
+        search_text="Aggregate Ordering Sentinel",
+        authorized_date=date(2026, 9, 2),
+    )
+    await _add_transaction(
+        db_session,
+        transaction_id="aggregate-oldest",
+        card_id=cards[2].id,
+        search_text="Aggregate Ordering Sentinel",
+        posted_date=date(2026, 9, 1),
+    )
+
+    result = await search_service.all_transactions(
+        eight_card_owner.id, "Aggregate Ordering Sentinel", limit=50
+    )
+
+    assert [row.transaction.id for row in result.rows] == [
+        "aggregate-newest",
+        "aggregate-middle",
+        "aggregate-oldest",
+    ]
+
+
+async def test_all_transactions_counts_the_full_fleet_when_search_has_no_matches(
+    search_service, eight_card_owner
+) -> None:
+    result = await search_service.all_transactions(
+        eight_card_owner.id, "No Aggregate Matches Exist"
+    )
+
+    assert result.rows == []
+    assert result.total_matches == 0
+    assert result.card_count == 8
+    assert result.bank_count == 4
+
+
+async def test_all_transactions_paginates_dated_and_null_date_rows_without_duplicates(
+    search_service, eight_card_owner, db_session
+) -> None:
+    cards = (await search_service.list_cards(eight_card_owner.id))[:3]
+    fixtures = [
+        ("aggregate-page-5", cards[0].id, date(2026, 9, 5), None),
+        ("aggregate-page-4", cards[1].id, date(2026, 9, 4), None),
+        ("aggregate-page-3", cards[2].id, None, date(2026, 9, 3)),
+        ("aggregate-page-null-b", cards[0].id, None, None),
+        ("aggregate-page-null-a", cards[1].id, None, None),
+    ]
+    for transaction_id, card_id, posted, authorized in fixtures:
+        await _add_transaction(
+            db_session,
+            transaction_id=transaction_id,
+            card_id=card_id,
+            search_text="Aggregate Pagination Sentinel",
+            posted_date=posted,
+            authorized_date=authorized,
+        )
+
+    cursor = None
+    received: list[str] = []
+    while True:
+        page = await search_service.all_transactions(
+            eight_card_owner.id,
+            "Aggregate Pagination Sentinel",
+            limit=2,
+            cursor=cursor,
+        )
+        received.extend(row.transaction.id for row in page.rows)
+        if not page.has_more:
+            break
+        cursor = page.next_cursor
+
+    assert received == [
+        "aggregate-page-5",
+        "aggregate-page-4",
+        "aggregate-page-3",
+        "aggregate-page-null-b",
+        "aggregate-page-null-a",
+    ]
+    assert len(received) == len(set(received))
+
+
+async def test_all_transactions_paginates_equal_dates_by_descending_id(
+    search_service, eight_card_owner, db_session
+) -> None:
+    cards = (await search_service.list_cards(eight_card_owner.id))[:3]
+    for transaction_id, card in zip(
+        ["equal-date-c", "equal-date-b", "equal-date-a"], cards, strict=True
+    ):
+        await _add_transaction(
+            db_session,
+            transaction_id=transaction_id,
+            card_id=card.id,
+            search_text="Equal Date Cursor Sentinel",
+            posted_date=date(2026, 9, 6),
+        )
+
+    first = await search_service.all_transactions(
+        eight_card_owner.id, "Equal Date Cursor Sentinel", limit=2
+    )
+    second = await search_service.all_transactions(
+        eight_card_owner.id,
+        "Equal Date Cursor Sentinel",
+        limit=2,
+        cursor=first.next_cursor,
+    )
+
+    assert [row.transaction.id for row in first.rows] == [
+        "equal-date-c",
+        "equal-date-b",
+    ]
+    assert [row.transaction.id for row in second.rows] == ["equal-date-a"]
+    assert second.has_more is False
+
+
+async def test_all_transactions_cursor_is_signed_and_bound_to_query(
+    search_service, eight_card_owner
+) -> None:
+    page = await search_service.all_transactions(eight_card_owner.id, "Paze", limit=2)
+    tampered = (page.next_cursor or "")[:-2] + "AA"
+
+    with pytest.raises(AppError) as tampered_error:
+        await search_service.all_transactions(
+            eight_card_owner.id, "Paze", limit=2, cursor=tampered
+        )
+    with pytest.raises(AppError) as replay_error:
+        await search_service.all_transactions(
+            eight_card_owner.id,
+            "Juniper",
+            limit=2,
+            cursor=page.next_cursor,
+        )
+
+    assert tampered_error.value.code == "CURSOR_INVALID"
+    assert replay_error.value.code == "CURSOR_INVALID"
+
+
+def test_aggregate_cursor_uses_constant_time_comparison_for_query_binding(
+    monkeypatch,
+) -> None:
+    import app.services.search_service as search_service_module
+
+    calls: list[tuple[object, object]] = []
+    real_compare_digest = search_service_module.hmac.compare_digest
+
+    def recording_compare_digest(left, right):
+        calls.append((left, right))
+        return real_compare_digest(left, right)
+
+    monkeypatch.setattr(
+        search_service_module.hmac, "compare_digest", recording_compare_digest
+    )
+    codec = AggregateCursorCodec("s" * 32)
+    cursor = codec.encode("paze", "2026-09-06", "transaction-id")
+
+    assert codec.decode(cursor, "paze") == ("2026-09-06", "transaction-id")
+    assert calls[-1] == (b"paze", b"paze")
+
+
+def test_aggregate_cursor_query_binding_supports_unicode() -> None:
+    codec = AggregateCursorCodec("s" * 32)
+    cursor = codec.encode("café", "2026-09-06", "transaction-id")
+
+    assert codec.decode(cursor, "café") == ("2026-09-06", "transaction-id")
+
+
+async def test_all_transactions_excludes_other_owner_inactive_card_and_removed_connection_rows(
+    search_service, eight_card_owner, db_session
+) -> None:
+    active_card = (await search_service.list_cards(eight_card_owner.id))[0]
+    await _add_transaction(
+        db_session,
+        transaction_id="aggregate-visible",
+        card_id=active_card.id,
+        search_text="Aggregate Scope Sentinel",
+        posted_date=date(2026, 9, 1),
+    )
+    other_owner = Owner(
+        id="aggregate-other-owner",
+        email="aggregate-other@example.com",
+        password_hash="hash",
+    )
+    other_connection = BankConnection(
+        id="aggregate-other-connection",
+        owner_id=other_owner.id,
+        bank_slug="chase",
+        institution_id="aggregate-other-institution",
+        institution_name="Other Bank",
+        plaid_item_id="aggregate-other-item",
+        plaid_environment="test",
+        lifecycle_status="active",
+    )
+    other_card = CardAccount(
+        id="aggregate-other-card",
+        connection_id=other_connection.id,
+        plaid_account_id="aggregate-other-account",
+        name="Other Card",
+        is_active=True,
+    )
+    inactive_card = CardAccount(
+        id="aggregate-inactive-card",
+        connection_id=active_card.connection_id,
+        plaid_account_id="aggregate-inactive-account",
+        name="Inactive Card",
+        is_active=False,
+    )
+    removed_connection = BankConnection(
+        id="aggregate-removed-connection",
+        owner_id=eight_card_owner.id,
+        bank_slug="citi",
+        institution_id="aggregate-removed-institution",
+        institution_name="Removed Bank",
+        plaid_item_id="aggregate-removed-item",
+        plaid_environment="test",
+        lifecycle_status="removed",
+    )
+    removed_card = CardAccount(
+        id="aggregate-removed-card",
+        connection_id=removed_connection.id,
+        plaid_account_id="aggregate-removed-account",
+        name="Removed Card",
+        is_active=True,
+    )
+    db_session.add_all(
+        [
+            other_owner,
+            other_connection,
+            other_card,
+            inactive_card,
+            removed_connection,
+            removed_card,
+        ]
+    )
+    await db_session.commit()
+    for transaction_id, card_id in [
+        ("aggregate-other-owner-row", other_card.id),
+        ("aggregate-inactive-card-row", inactive_card.id),
+        ("aggregate-removed-connection-row", removed_card.id),
+    ]:
+        await _add_transaction(
+            db_session,
+            transaction_id=transaction_id,
+            card_id=card_id,
+            search_text="Aggregate Scope Sentinel",
+            posted_date=date(2026, 9, 2),
+        )
+
+    result = await search_service.all_transactions(
+        eight_card_owner.id, "Aggregate Scope Sentinel"
+    )
+
+    assert [row.transaction.id for row in result.rows] == ["aggregate-visible"]
+
+
+async def test_all_transactions_cache_as_of_uses_oldest_active_card_sync(
+    search_service, eight_card_owner, db_session
+) -> None:
+    connections = (
+        await db_session.execute(
+            select(BankConnection)
+            .where(BankConnection.owner_id == eight_card_owner.id)
+            .where(BankConnection.lifecycle_status == "active")
+        )
+    ).scalars().all()
+    for index, connection in enumerate(connections):
+        connection.last_successful_sync_at = datetime(2026, 9, 2 + index, tzinfo=UTC)
+    connections[1].last_successful_sync_at = datetime(2026, 9, 1, tzinfo=UTC)
+    await db_session.commit()
+
+    result = await search_service.all_transactions(eight_card_owner.id)
+
+    assert result.cache_as_of == datetime(2026, 9, 1, tzinfo=UTC)

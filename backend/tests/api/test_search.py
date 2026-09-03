@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from httpx import AsyncClient
+from sqlalchemy import select
+
+from app.models import CardAccount
 
 
 async def test_search_requires_authentication(client: AsyncClient) -> None:
@@ -156,3 +159,118 @@ async def test_response_exposes_display_fields_for_each_row(
         "pending",
     }
     assert row["currency_code"] == "USD"
+
+
+async def test_all_transactions_requires_authentication(client: AsyncClient) -> None:
+    response = await client.get("/api/transactions?q=Paze")
+
+    assert response.status_code == 401
+
+
+async def test_all_transactions_returns_the_demo_fleet_in_global_order(
+    demo_client: AsyncClient, demo_login, eight_card_owner
+) -> None:
+    response = await demo_client.get("/api/transactions?limit=50")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert set(body) == {
+        "query",
+        "total_matches",
+        "card_count",
+        "bank_count",
+        "rows",
+        "next_cursor",
+        "has_more",
+        "cache_as_of",
+    }
+    assert body["card_count"] == 8
+    assert body["bank_count"] == 4
+    assert body["total_matches"] >= len(body["rows"])
+    assert [
+        (row["transaction"]["posted_date"] or row["transaction"]["authorized_date"], row["transaction"]["id"])
+        for row in body["rows"]
+    ] == sorted(
+        [
+            (row["transaction"]["posted_date"] or row["transaction"]["authorized_date"], row["transaction"]["id"])
+            for row in body["rows"]
+        ],
+        reverse=True,
+    )
+
+
+async def test_all_transactions_paze_rows_include_nested_transaction_and_card(
+    demo_client: AsyncClient, demo_login, eight_card_owner
+) -> None:
+    response = await demo_client.get("/api/transactions?q=Paze")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_matches"] == 10
+    assert len(body["rows"]) == 10
+    assert all(set(row) == {"transaction", "card"} for row in body["rows"])
+    assert all(row["card"]["bank"] for row in body["rows"])
+    assert all(row["card"]["mask"] for row in body["rows"])
+
+
+async def test_card_responses_never_serialize_malformed_or_non_four_digit_masks(
+    demo_client: AsyncClient, demo_login, eight_card_owner, db_session
+) -> None:
+    initial = (await demo_client.get("/api/transactions?q=Paze")).json()
+    card_id = initial["rows"][0]["card"]["id"]
+    card = (
+        await db_session.execute(select(CardAccount).where(CardAccount.id == card_id))
+    ).scalars().one()
+
+    for unsafe_mask in ["4111111111111111", "123", "12A4", "１２３４"]:
+        card.mask = unsafe_mask
+        await db_session.commit()
+
+        aggregate = (await demo_client.get("/api/transactions?q=Paze")).json()
+        aggregate_card = next(
+            row["card"] for row in aggregate["rows"] if row["card"]["id"] == card_id
+        )
+        assert aggregate_card["mask"] is None
+
+    grouped = (await demo_client.get("/api/transactions/search?q=Paze")).json()
+    grouped_card = next(
+        group["card"] for group in grouped["groups"] if group["card"]["id"] == card_id
+    )
+    per_card = (
+        await demo_client.get(f"/api/cards/{card_id}/transactions?q=Paze")
+    ).json()
+
+    assert grouped_card["mask"] is None
+    assert per_card["card"]["mask"] is None
+
+
+async def test_all_transactions_validates_limit_and_query_boundaries(
+    demo_client: AsyncClient, demo_login, eight_card_owner
+) -> None:
+    for path in [
+        "/api/transactions?limit=0",
+        "/api/transactions?limit=51",
+        f"/api/transactions?q={'x' * 201}",
+    ]:
+        response = await demo_client.get(path)
+        assert response.status_code == 422
+
+
+async def test_all_transactions_rejects_a_malformed_cursor(
+    demo_client: AsyncClient, demo_login, eight_card_owner
+) -> None:
+    response = await demo_client.get("/api/transactions?cursor=not-a-cursor")
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "CURSOR_INVALID"
+
+
+async def test_all_transactions_never_calls_plaid(
+    demo_client: AsyncClient, demo_login, eight_card_owner, demo_plaid
+) -> None:
+    before = len(demo_plaid.link_token_requests)
+
+    response = await demo_client.get("/api/transactions?q=Paze")
+
+    assert response.status_code == 200
+    assert len(demo_plaid.link_token_requests) == before

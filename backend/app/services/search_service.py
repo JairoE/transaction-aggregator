@@ -28,6 +28,8 @@ MAX_QUERY_LENGTH = 100
 TRIGRAM_MINIMUM = 3
 DEFAULT_PER_CARD_LIMIT = 25
 MAX_PER_CARD_LIMIT = 50
+DEFAULT_ALL_TRANSACTIONS_LIMIT = 50
+MAX_ALL_TRANSACTIONS_LIMIT = 50
 BANK_ORDER = {slug: index for index, slug in enumerate(SUPPORTED_BANKS)}
 
 
@@ -125,6 +127,24 @@ class GroupedSearchResult:
     cache_as_of: datetime | None
 
 
+@dataclass(frozen=True)
+class AllTransactionRow:
+    transaction: TransactionRow
+    card: CardRow
+
+
+@dataclass(frozen=True)
+class AllTransactionsResult:
+    query: str
+    total_matches: int
+    card_count: int
+    bank_count: int
+    rows: list[AllTransactionRow]
+    next_cursor: str | None
+    has_more: bool
+    cache_as_of: datetime | None
+
+
 class CursorCodec:
     """Opaque, signed, card-scoped continuation cursors."""
 
@@ -161,6 +181,50 @@ class CursorCodec:
         return data.get("d"), str(data.get("i"))
 
 
+class AggregateCursorCodec:
+    """Opaque, signed continuation cursors bound to a normalized query."""
+
+    def __init__(self, secret: str) -> None:
+        self._secret = secret.encode("utf-8")
+
+    def encode(self, query: str, sort_date: str | None, row_id: str) -> str:
+        payload = json.dumps(
+            {"q": query, "d": sort_date, "i": row_id}, separators=(",", ":")
+        ).encode("utf-8")
+        signature = hmac.new(self._secret, payload, sha256).digest()[:16]
+        return _b64(payload) + "." + _b64(signature)
+
+    def decode(self, cursor: str, expected_query: str) -> tuple[str | None, str]:
+        try:
+            payload_part, signature_part = cursor.split(".", 1)
+            payload = _unb64(payload_part)
+            signature = _unb64(signature_part)
+        except (ValueError, TypeError) as error:
+            raise _cursor_invalid() from error
+
+        expected = hmac.new(self._secret, payload, sha256).digest()[:16]
+        if not hmac.compare_digest(expected, signature):
+            raise _cursor_invalid()
+
+        try:
+            data = json.loads(payload)
+            query = data["q"]
+            sort_date = data["d"]
+            row_id = data["i"]
+        except (KeyError, TypeError, ValueError) as error:
+            raise _cursor_invalid() from error
+
+        if not isinstance(query, str) or not hmac.compare_digest(
+            query.encode("utf-8"), expected_query.encode("utf-8")
+        ):
+            raise _cursor_invalid()
+        if not isinstance(row_id, str):
+            raise _cursor_invalid()
+        if sort_date is not None and not isinstance(sort_date, str):
+            raise _cursor_invalid()
+        return sort_date, row_id
+
+
 def _cursor_invalid() -> AppError:
     return AppError("CURSOR_INVALID", "That page link is no longer valid.", 400)
 
@@ -177,6 +241,7 @@ class SearchService:
     def __init__(self, session: AsyncSession, application_secret: str) -> None:
         self._session = session
         self._cursors = CursorCodec(application_secret)
+        self._aggregate_cursors = AggregateCursorCodec(application_secret)
 
     async def list_cards(self, owner_id: str) -> list[CardRow]:
         rows = (
@@ -301,11 +366,93 @@ class SearchService:
             has_more=has_more,
         )
 
+    async def all_transactions(
+        self,
+        owner_id: str,
+        query: str | None = None,
+        limit: int = DEFAULT_ALL_TRANSACTIONS_LIMIT,
+        cursor: str | None = None,
+    ) -> AllTransactionsResult:
+        capped = max(1, min(limit, MAX_ALL_TRANSACTIONS_LIMIT))
+        normalized = normalize_query(query)
+        cards = await self.list_cards(owner_id)
+        cache_as_of = _cache_as_of(cards)
+        statement = self._aggregate_matching(owner_id, normalized)
+        total_statement = select(func.count()).select_from(statement.subquery())
+        total_matches = int(
+            (await self._session.execute(total_statement)).scalar_one()
+        )
+
+        sort_date = func.coalesce(Transaction.posted_date, Transaction.authorized_date)
+        if cursor:
+            last_date, last_id = self._aggregate_cursors.decode(
+                cursor, normalized.normalized
+            )
+            if last_date is None:
+                statement = statement.where(sort_date.is_(None)).where(
+                    Transaction.id < last_id
+                )
+            else:
+                statement = statement.where(
+                    or_(
+                        sort_date.is_(None),
+                        sort_date < last_date,
+                        (sort_date == last_date) & (Transaction.id < last_id),
+                    )
+                )
+
+        statement = statement.order_by(
+            sort_date.is_(None).asc(), sort_date.desc(), Transaction.id.desc()
+        ).limit(capped + 1)
+        page = (await self._session.execute(statement)).all()
+        has_more = len(page) > capped
+        visible = page[:capped]
+        rows = [
+            AllTransactionRow(
+                transaction=_to_row(transaction),
+                card=_card_to_row(card, connection),
+            )
+            for transaction, card, connection in visible
+        ]
+        next_cursor = None
+        if has_more and rows:
+            last = rows[-1].transaction
+            last_date = last.posted_date or last.authorized_date
+            next_cursor = self._aggregate_cursors.encode(
+                normalized.normalized,
+                last_date.isoformat() if last_date else None,
+                last.id,
+            )
+
+        return AllTransactionsResult(
+            query=normalized.raw,
+            total_matches=total_matches,
+            card_count=len(cards),
+            bank_count=len({card.bank for card in cards}),
+            rows=rows,
+            next_cursor=next_cursor,
+            has_more=has_more,
+            cache_as_of=cache_as_of,
+        )
+
     # --- query building ---------------------------------------------------
     def _matching(self, card_id: str, normalized: NormalizedQuery) -> Select[tuple]:
         return (
             select(Transaction)
             .where(Transaction.card_account_id == card_id)
+            .where(transaction_match_filter(normalized))
+        )
+
+    def _aggregate_matching(
+        self, owner_id: str, normalized: NormalizedQuery
+    ) -> Select[tuple[Transaction, CardAccount, BankConnection]]:
+        return (
+            select(Transaction, CardAccount, BankConnection)
+            .join(CardAccount, CardAccount.id == Transaction.card_account_id)
+            .join(BankConnection, BankConnection.id == CardAccount.connection_id)
+            .where(BankConnection.owner_id == owner_id)
+            .where(BankConnection.lifecycle_status == "active")
+            .where(CardAccount.is_active.is_(True))
             .where(transaction_match_filter(normalized))
         )
 
@@ -362,9 +509,34 @@ def _to_row(row: Transaction) -> TransactionRow:
     )
 
 
+def _card_to_row(card: CardAccount, connection: BankConnection) -> CardRow:
+    return CardRow(
+        id=card.id,
+        connection_id=connection.id,
+        bank=connection.bank_slug,
+        bank_display_name=connection.institution_name,
+        name=card.name,
+        official_name=card.official_name,
+        mask=card.mask,
+        display_order=card.display_order,
+        last_successful_sync_at=connection.last_successful_sync_at,
+        last_error_code=connection.last_error_code,
+    )
+
+
+def _cache_as_of(cards: list[CardRow]) -> datetime | None:
+    synced = [card.last_successful_sync_at for card in cards]
+    return min((value for value in synced if value is not None), default=None)
+
+
 __all__ = [
+    "DEFAULT_ALL_TRANSACTIONS_LIMIT",
     "DEFAULT_PER_CARD_LIMIT",
+    "MAX_ALL_TRANSACTIONS_LIMIT",
     "MAX_PER_CARD_LIMIT",
+    "AggregateCursorCodec",
+    "AllTransactionRow",
+    "AllTransactionsResult",
     "CardGroup",
     "CardRow",
     "CursorCodec",

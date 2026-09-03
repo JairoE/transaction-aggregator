@@ -12,6 +12,7 @@ from datetime import datetime
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.card_masks import normalize_card_mask
 from app.config import Settings
 from app.errors import AppError, NotFoundError
 from app.services.connection_health import classify_connection_health
@@ -505,7 +506,7 @@ class ConnectionService:
                     plaid_account_id=account.account_id,
                     name=account.name,
                     official_name=account.official_name,
-                    mask=account.mask,
+                    mask=normalize_card_mask(account.mask),
                     subtype=account.subtype,
                     is_active=True,
                     display_order=order,

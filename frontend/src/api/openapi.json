@@ -15,6 +15,88 @@
         "title": "AllTimeWindow",
         "type": "object"
       },
+      "AllTransactionRow": {
+        "properties": {
+          "card": {
+            "$ref": "#/components/schemas/CardResponse"
+          },
+          "transaction": {
+            "$ref": "#/components/schemas/TransactionMatch"
+          }
+        },
+        "required": [
+          "transaction",
+          "card"
+        ],
+        "title": "AllTransactionRow",
+        "type": "object"
+      },
+      "AllTransactionsResponse": {
+        "properties": {
+          "bank_count": {
+            "title": "Bank Count",
+            "type": "integer"
+          },
+          "cache_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache As Of"
+          },
+          "card_count": {
+            "title": "Card Count",
+            "type": "integer"
+          },
+          "has_more": {
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AllTransactionRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "total_matches": {
+            "title": "Total Matches",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "query",
+          "total_matches",
+          "card_count",
+          "bank_count",
+          "rows",
+          "next_cursor",
+          "has_more",
+          "cache_as_of"
+        ],
+        "title": "AllTransactionsResponse",
+        "type": "object"
+      },
       "BankConnectionResponse": {
         "properties": {
           "action": {
@@ -1966,6 +2048,78 @@
         "summary": "Update Transaction Limitation",
         "tags": [
           "transaction-limitations"
+        ]
+      }
+    },
+    "/api/transactions": {
+      "get": {
+        "operationId": "all_transactions_api_transactions_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 200,
+              "title": "Q",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AllTransactionsResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "All Transactions",
+        "tags": [
+          "search"
         ]
       }
     },

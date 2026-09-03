@@ -118,6 +118,43 @@ async def test_exchange_encrypts_token_and_stores_only_credit_cards(
     assert {card.mask for card in cards} == {"4812", "9064"}
 
 
+async def test_exchange_stores_only_exactly_four_ascii_mask_digits(
+    connection_service: ConnectionService, owner, fake_plaid, db_session
+) -> None:
+    original = fake_plaid.get_accounts
+
+    def masks_at_the_provider_boundary(_access_token: str):
+        return [
+            credit_card("acct-valid-mask", "Valid", "4812"),
+            credit_card("acct-full-pan", "Full PAN", "4111111111111111"),
+            credit_card("acct-short-mask", "Short", "123"),
+            credit_card("acct-mixed-mask", "Mixed", "12A4"),
+            credit_card("acct-unicode-mask", "Unicode", "１２３４"),
+        ]
+
+    fake_plaid.get_accounts = masks_at_the_provider_boundary  # type: ignore[method-assign]
+    try:
+        connection = await connection_service.exchange_public_token(
+            owner, "capital-one", "public-mask-boundary", "ins_128026", "Capital One"
+        )
+    finally:
+        fake_plaid.get_accounts = original  # type: ignore[method-assign]
+
+    cards = (
+        await db_session.execute(
+            select(CardAccount).where(CardAccount.connection_id == connection.id)
+        )
+    ).scalars().all()
+
+    assert {card.plaid_account_id: card.mask for card in cards} == {
+        "acct-valid-mask": "4812",
+        "acct-full-pan": None,
+        "acct-short-mask": None,
+        "acct-mixed-mask": None,
+        "acct-unicode-mask": None,
+    }
+
+
 async def test_exchange_enqueues_initial_sync(
     connection_service: ConnectionService, owner, db_session
 ) -> None:

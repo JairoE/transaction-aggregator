@@ -5,6 +5,7 @@ type CardResponse = components['schemas']['CardResponse']
 type TransactionMatch = components['schemas']['TransactionMatch']
 type CardTransactionGroup = components['schemas']['CardTransactionGroup']
 type GroupedSearchResponse = components['schemas']['GroupedSearchResponse']
+type AllTransactionsResponse = components['schemas']['AllTransactionsResponse']
 
 const BANKS: { bank: CardResponse['bank']; displayName: string }[] = [
   { bank: 'capital-one', displayName: 'Capital One' },
@@ -137,6 +138,129 @@ export function recentSearchResponse(): GroupedSearchResponse {
   }
 }
 
+/** A globally ordered, cross-bank aggregate page for the All transactions view. */
+export function recentAllTransactionsResponse(): AllTransactionsResponse {
+  const rows = [
+    {
+      transaction: makeTransaction({
+        id: 'aggregate-capital-one-newest',
+        card_id: DASHBOARD_CARDS[0].id,
+        merchant_name: 'Capital One Newest Purchase',
+        description: 'CAPITAL ONE NEWEST PURCHASE',
+        original_description: 'POS CAPITAL ONE NEWEST PURCHASE',
+        amount_cents: 4812,
+        posted_date: '2026-08-21',
+        pending: false,
+      }),
+      card: DASHBOARD_CARDS[0],
+    },
+    {
+      transaction: makeTransaction({
+        id: 'aggregate-chase-pending',
+        card_id: DASHBOARD_CARDS[2].id,
+        merchant_name: 'Chase Pending Purchase',
+        description: 'CHASE PENDING PURCHASE',
+        original_description: null,
+        amount_cents: -1250,
+        posted_date: '2026-08-20',
+        pending: true,
+      }),
+      card: DASHBOARD_CARDS[2],
+    },
+    {
+      transaction: makeTransaction({
+        id: 'aggregate-citi-authorized',
+        card_id: DASHBOARD_CARDS[4].id,
+        merchant_name: 'Citi Authorized Purchase',
+        description: 'CITI AUTHORIZED PURCHASE',
+        original_description: null,
+        amount_cents: 2400,
+        authorized_date: '2026-08-19',
+        posted_date: null,
+      }),
+      card: DASHBOARD_CARDS[4],
+    },
+    {
+      transaction: makeTransaction({
+        id: 'aggregate-wells-unknown-date',
+        card_id: DASHBOARD_CARDS[6].id,
+        merchant_name: 'Wells Fargo Unknown Date',
+        description: 'WELLS FARGO UNKNOWN DATE',
+        original_description: null,
+        amount_cents: 5100,
+        authorized_date: null,
+        posted_date: null,
+      }),
+      card: DASHBOARD_CARDS[6],
+    },
+  ]
+
+  return {
+    query: '',
+    total_matches: rows.length,
+    card_count: DASHBOARD_CARDS.length,
+    bank_count: 4,
+    rows,
+    next_cursor: 'aggregate-recent-next',
+    has_more: true,
+    cache_as_of: '2026-08-19T12:29:30Z',
+  }
+}
+
+export function pazeAllTransactionsResponse(): AllTransactionsResponse {
+  const base = recentAllTransactionsResponse()
+  return {
+    ...base,
+    query: 'Paze',
+    total_matches: 2,
+    rows: base.rows.slice(0, 2).map((row, index) => ({
+      ...row,
+      transaction: {
+        ...row.transaction,
+        id: `aggregate-paze-${index + 1}`,
+        merchant_name: `Paze aggregate ${index + 1}`,
+        description: `PAZE AGGREGATE ${index + 1}`,
+      },
+    })),
+    next_cursor: null,
+    has_more: false,
+  }
+}
+
+export function aggregateNextPage(): AllTransactionsResponse {
+  const base = recentAllTransactionsResponse()
+  return {
+    ...base,
+    rows: [{
+      transaction: makeTransaction({
+        id: 'aggregate-wells-next-page',
+        card_id: DASHBOARD_CARDS[7].id,
+        merchant_name: 'Wells Fargo Later Purchase',
+        description: 'WELLS FARGO LATER PURCHASE',
+        original_description: null,
+        amount_cents: 3200,
+        posted_date: '2026-08-18',
+      }),
+      card: DASHBOARD_CARDS[7],
+    }],
+    next_cursor: null,
+    has_more: false,
+  }
+}
+
+export function emptyAllTransactionsResponse(query = ''): AllTransactionsResponse {
+  return {
+    query,
+    total_matches: 0,
+    card_count: DASHBOARD_CARDS.length,
+    bank_count: 4,
+    rows: [],
+    next_cursor: null,
+    has_more: false,
+    cache_as_of: '2026-08-19T12:29:30Z',
+  }
+}
+
 /** Every card visible, but all except the first have zero matches — used to
  * exercise the zero-match rendering path without contradicting the exact
  * "10 matches ... across 8 cards" Paze distribution above. */
@@ -183,5 +307,18 @@ export function cardTransactionsHandler(
     const cursor = url.searchParams.get('cursor')
     const cardId = String(params.cardId)
     return HttpResponse.json(responder(cardId, cursor))
+  })
+}
+
+export function allTransactionsHandler(
+  responder: (query: string, cursor: string | null) => AllTransactionsResponse | Promise<AllTransactionsResponse>,
+  onRequest?: (query: string, cursor: string | null) => void,
+) {
+  return http.get('/api/transactions', async ({ request }) => {
+    const url = new URL(request.url)
+    const query = (url.searchParams.get('q') ?? '').trim()
+    const cursor = url.searchParams.get('cursor')
+    onRequest?.(query, cursor)
+    return HttpResponse.json(await responder(query, cursor))
   })
 }
