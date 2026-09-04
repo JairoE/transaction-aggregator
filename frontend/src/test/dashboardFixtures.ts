@@ -6,6 +6,7 @@ type TransactionMatch = components['schemas']['TransactionMatch']
 type CardTransactionGroup = components['schemas']['CardTransactionGroup']
 type GroupedSearchResponse = components['schemas']['GroupedSearchResponse']
 type AllTransactionsResponse = components['schemas']['AllTransactionsResponse']
+type TransactionRefreshResponse = components['schemas']['TransactionRefreshResponse']
 
 const BANKS: { bank: CardResponse['bank']; displayName: string }[] = [
   { bank: 'capital-one', displayName: 'Capital One' },
@@ -16,6 +17,42 @@ const BANKS: { bank: CardResponse['bank']; displayName: string }[] = [
 
 /** Masks in fixed bank order, two per bank, exactly as specified for Task 8. */
 const MASKS = ['4812', '9064', '1187', '2041', '7730', '3628', '5509', '6144']
+
+export function transactionRefreshRun(
+  overrides: Partial<TransactionRefreshResponse> = {},
+): TransactionRefreshResponse {
+  return {
+    id: 'refresh-1',
+    state: 'queued',
+    created_at: '2026-09-03T12:00:00Z',
+    started_at: null,
+    finished_at: null,
+    expires_at: '2026-09-10T12:00:00Z',
+    summary: {
+      total: 1,
+      completed: 0,
+      updated: 0,
+      attention: 0,
+      added: 0,
+      modified: 0,
+      removed: 0,
+    },
+    targets: [
+      {
+        connection_id: 'conn-capital-one',
+        bank: 'capital-one',
+        state: 'queued',
+        refresh_outcome: 'not_attempted',
+        next_refresh_eligible_at: null,
+        added: 0,
+        modified: 0,
+        removed: 0,
+        error_code: null,
+      },
+    ],
+    ...overrides,
+  }
+}
 
 /** Eight cards: two each for Capital One, Chase, Citi, and Wells Fargo. */
 export const DASHBOARD_CARDS: CardResponse[] = BANKS.flatMap((bankMeta, bankIndex) =>
