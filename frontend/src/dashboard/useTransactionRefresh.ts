@@ -27,6 +27,7 @@ function newIdempotencyKey(): string {
 
 export interface UseTransactionRefreshOptions {
   ownerId: string
+  enabled?: boolean
   onTerminal?: () => void
   pollScheduleMs?: readonly number[]
   foregroundLimitMs?: number
@@ -45,6 +46,7 @@ export interface UseTransactionRefreshResult {
 
 export function useTransactionRefresh({
   ownerId,
+  enabled = true,
   onTerminal,
   pollScheduleMs = DEFAULT_POLL_SCHEDULE_MS,
   foregroundLimitMs = FOREGROUND_LIMIT_MS,
@@ -65,7 +67,7 @@ export function useTransactionRefresh({
   const activeQuery = useQuery({
     queryKey: ['transaction-refresh', 'active', ownerId] as const,
     queryFn: fetchActiveTransactionRefresh,
-    enabled: online,
+    enabled: enabled && online,
     staleTime: 0,
     refetchOnWindowFocus: false,
   })
@@ -103,14 +105,14 @@ export function useTransactionRefresh({
   })
 
   const start = useCallback(() => {
-    if (startingRef.current || isActive(knownRunRef.current) || !online) return
+    if (!enabled || startingRef.current || isActive(knownRunRef.current) || !online) return
     startingRef.current = true
     idempotencyKeyRef.current ??= newIdempotencyKey()
     mutation.mutate(idempotencyKeyRef.current)
-  }, [mutation, online])
+  }, [enabled, mutation, online])
 
   useEffect(() => {
-    if (!run || !isActive(run) || !online || !visible || foregroundTimedOut) return
+    if (!enabled || !run || !isActive(run) || !online || !visible || foregroundTimedOut) return
     const startedAt = pollingStartedAtRef.current || Date.now()
     pollingStartedAtRef.current = startedAt
     const remaining = foregroundLimitMs - (Date.now() - startedAt)
@@ -145,13 +147,13 @@ export function useTransactionRefresh({
       cancelled = true
       window.clearTimeout(timer)
     }
-  }, [foregroundLimitMs, foregroundTimedOut, jitter, online, pollScheduleMs, run, visible])
+  }, [enabled, foregroundLimitMs, foregroundTimedOut, jitter, online, pollScheduleMs, run, visible])
 
   useEffect(() => {
     const handleVisibility = () => setVisible(document.visibilityState !== 'hidden')
     const recover = () => {
       const known = knownRunRef.current
-      if (!online) return
+      if (!enabled || !online) return
       if (known && isActive(known)) {
         pollingStartedAtRef.current = Date.now()
         setForegroundTimedOut(false)
@@ -166,17 +168,17 @@ export function useTransactionRefresh({
       document.removeEventListener('visibilitychange', handleVisibility)
       window.removeEventListener('focus', recover)
     }
-  }, [activeQuery, online])
+  }, [activeQuery, enabled, online])
 
   useEffect(() => {
-    if (!online) return
+    if (!enabled || !online) return
     const known = knownRunRef.current
     if (known && isActive(known)) {
       pollingStartedAtRef.current = Date.now()
       setForegroundTimedOut(false)
       void fetchTransactionRefresh(known.id).then(setRun).catch(() => undefined)
     }
-  }, [online])
+  }, [enabled, online])
 
   useEffect(() => {
     if (!run || isActive(run) || completedRunsRef.current.has(run.id)) return

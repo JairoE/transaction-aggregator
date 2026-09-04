@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { http, HttpResponse, delay } from 'msw'
 import { server } from '../test/server'
 import { renderAppAt } from '../test/renderApp'
 import { runAxeSmokeTest } from '../test/axe'
-import { authenticatedSessionHandler } from '../test/handlers'
+import {
+  authenticatedSessionHandler,
+  connectionsHandler,
+  makeConnectionsResponse,
+} from '../test/handlers'
 import {
   DASHBOARD_CARDS,
   cardTransactionsHandler,
@@ -12,6 +17,7 @@ import {
   pazeSearchResponse,
   recentSearchResponse,
   searchHandler,
+  transactionRefreshRun,
   zeroMatchSearchResponse,
 } from '../test/dashboardFixtures'
 import { highlightText } from './highlight'
@@ -29,6 +35,73 @@ function regionFor(mask: string) {
 describe('dashboard card grid', () => {
   beforeEach(() => {
     server.use(authenticatedSessionHandler())
+  })
+
+  it('checks every active connection once and announces the terminal result', async () => {
+    let createCalls = 0
+    server.use(
+      searchHandler(() => recentSearchResponse()),
+      connectionsHandler(
+        makeConnectionsResponse([
+          {
+            bank: 'capital-one',
+            connected: true,
+            connection_id: 'conn-capital-one',
+            lifecycle_status: 'active',
+            card_count: 2,
+          },
+        ]),
+      ),
+      http.post('/api/transaction-refreshes', async () => {
+        createCalls += 1
+        await delay(300)
+        return HttpResponse.json(
+          {
+            coalesced: false,
+            refresh: transactionRefreshRun({
+              state: 'succeeded',
+              finished_at: '2026-09-03T12:00:02Z',
+              summary: {
+                total: 1,
+                completed: 1,
+                updated: 1,
+                attention: 0,
+                added: 1,
+                modified: 0,
+                removed: 0,
+              },
+            }),
+          },
+          { status: 202 },
+        )
+      }),
+    )
+    await renderDashboard()
+    const button = screen.getByRole('button', { name: /check for new transactions/i })
+
+    fireEvent.click(button)
+    fireEvent.click(button)
+
+    await waitFor(() => expect(button).toBeDisabled())
+    expect(button).toHaveTextContent('Checking…')
+    expect(await screen.findByText('1 new or updated transaction found.')).toBeInTheDocument()
+    expect(createCalls).toBe(1)
+  })
+
+  it('hides the action when the server capability is disabled', async () => {
+    server.use(
+      searchHandler(() => recentSearchResponse()),
+      connectionsHandler(
+        makeConnectionsResponse(
+          [{ bank: 'capital-one', connected: true, connection_id: 'conn-1', card_count: 1 }],
+          { transaction_refresh_enabled: false },
+        ),
+      ),
+    )
+
+    await renderDashboard()
+
+    expect(screen.queryByRole('button', { name: /check for new transactions/i })).not.toBeInTheDocument()
   })
 
   it('renders all eight cards under exactly one search input on initial load', async () => {

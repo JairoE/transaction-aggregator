@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { useAuth } from '../auth/AuthProvider'
@@ -26,6 +26,8 @@ import { persistSearchResult, readPersistedSearchResult } from './searchCache'
 import { recordSearchHistory } from './searchHistory'
 import { SearchBar } from './SearchBar'
 import { SearchQueryProvider } from './SearchContext'
+import { RefreshTransactionsControl } from './RefreshTransactionsControl'
+import { useTransactionRefresh } from './useTransactionRefresh'
 
 interface CardPageState {
   extraTransactions: DashboardCardGroup['transactions']
@@ -73,7 +75,8 @@ export function DashboardPage() {
   const view = resolveView(searchParams.get('view'))
   const [pageState, setPageState] = useState<Record<string, CardPageState>>({})
   const [aggregatePage, setAggregatePage] = useState<AggregatePageState | null>(null)
-  const continuationScopeKey = `${view}\u0000${submittedQuery}`
+  const [dataRevision, setDataRevision] = useState(0)
+  const continuationScopeKey = `${view}\u0000${submittedQuery}\u0000${dataRevision}`
   const continuationScopeRef = useRef({ key: continuationScopeKey, generation: 0 })
   if (continuationScopeRef.current.key !== continuationScopeKey) {
     continuationScopeRef.current = {
@@ -84,6 +87,22 @@ export function DashboardPage() {
   const continuationGeneration = continuationScopeRef.current.generation
 
   const connectionsQuery = useQuery(connectionsQueryOptions)
+  const canRefreshTransactions = Boolean(
+    connectionsQuery.data?.transaction_refresh_enabled &&
+      connectionsQuery.data.banks.some(
+        (bank) => bank.connected && bank.lifecycle_status === 'active',
+      ),
+  )
+  const resetContinuationState = useCallback(() => {
+    setPageState({})
+    setAggregatePage(null)
+    setDataRevision((revision) => revision + 1)
+  }, [])
+  const transactionRefresh = useTransactionRefresh({
+    ownerId: owner?.id ?? '',
+    enabled: canRefreshTransactions,
+    onTerminal: resetContinuationState,
+  })
   const searchQuery = useQuery({
     queryKey: ['transactions', 'search', owner?.id ?? null, submittedQuery] as const,
     queryFn: () => fetchTransactionSearch(submittedQuery),
@@ -296,6 +315,13 @@ export function DashboardPage() {
           cacheAsOf={activeData?.cache_as_of ?? null}
           isOnline={isOnline}
         />
+
+        {canRefreshTransactions && (
+            <RefreshTransactionsControl
+              refresh={transactionRefresh}
+              isOnline={isOnline}
+            />
+        )}
 
         {view === 'cards' && limitationAlertsQuery.isError && (
           <p
