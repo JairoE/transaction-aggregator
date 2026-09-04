@@ -32,7 +32,6 @@ from app.services.plaid_gateway import (
     PlaidGateway,
     PlaidGatewayError,
     PlaidTransaction,
-    RefreshUnsupported,
     SyncMutationDuringPagination,
     SyncPage,
 )
@@ -41,7 +40,6 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_JOB_STATES = ("queued", "running")
 MAX_PAGES_PER_ATTEMPT = 200
-REFRESH_COOLDOWN_MINUTES = 15
 
 
 @dataclass(frozen=True)
@@ -151,32 +149,6 @@ async def enqueue_stale_connections(
         await enqueue_sync(session, connection.id, trigger)
         queued += 1
     return queued
-
-
-async def request_refresh(
-    session: AsyncSession,
-    connection: BankConnection,
-    gateway: PlaidGateway,
-    cipher: TokenCipher,
-) -> bool:
-    """Best-effort provider refresh; disables itself when unsupported."""
-
-    if not connection.refresh_supported:
-        return False
-    last = connection.last_refresh_at
-    if last is not None and utcnow() - last < timedelta(minutes=REFRESH_COOLDOWN_MINUTES):
-        return False
-
-    access_token = decrypt_access_token(connection, cipher)
-    try:
-        gateway.transactions_refresh(access_token)
-    except RefreshUnsupported:
-        connection.refresh_supported = False
-        return False
-    except PlaidGatewayError:
-        return False
-    connection.last_refresh_at = utcnow()
-    return True
 
 
 def decrypt_access_token(connection: BankConnection, cipher: TokenCipher) -> str:
@@ -510,13 +482,11 @@ __all__ = [
     "EnqueuedSync",
     "LeaseLostError",
     "active_job_for",
-    "REFRESH_COOLDOWN_MINUTES",
     "SyncService",
     "SyncSummary",
     "decrypt_access_token",
     "enqueue_stale_connections",
     "enqueue_sync",
     "normalize_search_text",
-    "request_refresh",
     "to_cents",
 ]

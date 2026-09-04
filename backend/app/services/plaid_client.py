@@ -219,9 +219,9 @@ class PlaidPythonGateway:
             request_id=str(response.get("request_id") or "") or None,
         )
 
-    def transactions_refresh(self, access_token: str) -> None:
+    def transactions_refresh(self, access_token: str) -> str | None:
         try:
-            self._call(
+            response = self._call(
                 lambda: self._client.transactions_refresh(
                     TransactionsRefreshRequest(access_token=access_token)
                 )
@@ -230,6 +230,7 @@ class PlaidPythonGateway:
             if error.error_code in REFRESH_UNSUPPORTED_CODES:
                 raise RefreshUnsupported() from error
             raise
+        return str(response.get("request_id") or "") or None
 
     def remove_item(self, access_token: str) -> None:
         self._call(

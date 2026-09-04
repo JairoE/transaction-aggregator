@@ -128,22 +128,6 @@ async def test_one_connection_failure_does_not_block_another(
     assert jobs[second_connection.id].state == "succeeded"
 
 
-async def test_unsupported_refresh_disables_the_capability(
-    sync_worker, db_session, connected_connection, fake_plaid
-) -> None:
-    from app.models import BankConnection
-    from app.services.sync_service import request_refresh
-
-    fake_plaid.refresh_supported = False
-    connection = await db_session.get(BankConnection, connected_connection.id)
-
-    await request_refresh(db_session, connection, fake_plaid, sync_worker.cipher)
-    await db_session.commit()
-    await db_session.refresh(connection)
-
-    assert connection.refresh_supported is False
-
-
 async def test_failed_attempt_still_records_a_sync_run(
     sync_worker, database, db_session, connected_connection, fake_plaid
 ) -> None:

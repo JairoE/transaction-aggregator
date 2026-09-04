@@ -19,11 +19,19 @@ from app.db import Database
 from app.errors import AppError
 from app.models import BankConnection, SyncJob, SyncRun, utcnow
 from app.services.crypto import TokenCipher
-from app.services.plaid_gateway import PlaidGateway, PlaidGatewayError
+from app.services.plaid_gateway import (
+    PlaidGateway,
+    PlaidGatewayError,
+    RefreshUnsupported,
+)
 from app.services.sync_service import (
     LeaseLostError,
     SyncService,
     enqueue_stale_connections,
+)
+from app.services.transaction_refresh_service import (
+    RefreshPreparation,
+    TransactionRefreshService,
 )
 
 logger = logging.getLogger(__name__)
@@ -85,6 +93,10 @@ class SyncWorker:
         heartbeat_stop = asyncio.Event()
         heartbeat = asyncio.create_task(self._heartbeat(claim, heartbeat_stop))
         try:
+            refresh = await self._process_refresh_target(claim)
+            if refresh is not None and not refresh.should_sync:
+                await self._finish_without_sync(claim)
+                return True
             async with self._database.session() as session:
                 job = (
                     await session.execute(
@@ -103,11 +115,16 @@ class SyncWorker:
                     self.cipher,
                     provider_timeout_seconds=self._provider_timeout_seconds,
                 )
-                await service.synchronize(
+                summary = await service.synchronize(
                     connection_id,
                     job_id=job.id,
                     lease_token=claim.lease_token,
                     completed_generation=claim.target_generation,
+                )
+                await TransactionRefreshService(session).complete_target_for_sync(
+                    connection_id,
+                    claim.target_generation,
+                    summary,
                 )
                 connection = await session.get(BankConnection, connection_id)
                 if connection is None:
@@ -155,6 +172,100 @@ class SyncWorker:
         finally:
             heartbeat_stop.set()
             await heartbeat
+
+    async def _process_refresh_target(
+        self, claim: JobClaim
+    ) -> RefreshPreparation | None:
+        async with self._database.session() as session:
+            job = await session.get(SyncJob, claim.job_id)
+            if job is None:
+                return None
+            service = TransactionRefreshService(session)
+            target_id = await service.reserve_target_for_job(
+                job.connection_id, job.id, claim.lease_token
+            )
+            await session.commit()
+        if target_id is None:
+            return None
+
+        async with self._database.session() as session:
+            service = TransactionRefreshService(session)
+            preparation = await service.prepare_reserved_target(
+                target_id, claim.job_id, claim.lease_token, self.cipher
+            )
+            await session.commit()
+        if preparation is None or preparation.access_token is None:
+            return preparation
+
+        outcome = "accepted"
+        request_id: str | None = None
+        error_code: str | None = None
+        should_sync = True
+        try:
+            request_id = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._gateway.transactions_refresh,
+                    preparation.access_token,
+                ),
+                timeout=self._provider_timeout_seconds,
+            )
+        except RefreshUnsupported:
+            outcome = "unsupported"
+            error_code = "PRODUCTS_NOT_SUPPORTED"
+        except TimeoutError:
+            outcome = "outcome_unknown"
+            error_code = "REFRESH_OUTCOME_UNKNOWN"
+        except PlaidGatewayError as error:
+            outcome = "failed"
+            error_code = error.error_code
+            should_sync = error.retry_class != "owner_action"
+
+        async with self._database.session() as session:
+            recorded = await TransactionRefreshService(
+                session
+            ).record_dispatch_outcome(
+                target_id,
+                claim.job_id,
+                claim.lease_token,
+                outcome,
+                provider_request_id=request_id,
+                error_code=error_code,
+            )
+            if not recorded:
+                await session.rollback()
+                raise LeaseLostError(claim.job_id)
+            await session.commit()
+        logger.info(
+            "transaction_refresh_dispatch_completed",
+            extra={
+                "job_id": claim.job_id,
+                "target_id": target_id,
+                "outcome": outcome,
+                "error_code": error_code,
+            },
+        )
+        return RefreshPreparation(target_id, None, should_sync=should_sync)
+
+    async def _finish_without_sync(self, claim: JobClaim) -> None:
+        async with self._database.session() as session:
+            finished = await session.execute(
+                update(SyncJob)
+                .where(SyncJob.id == claim.job_id)
+                .where(SyncJob.state == "running")
+                .where(SyncJob.lease_token == claim.lease_token)
+                .values(
+                    state="succeeded",
+                    finished_at=utcnow(),
+                    lease_owner=None,
+                    lease_token=None,
+                    lease_expires_at=None,
+                    updated_at=utcnow(),
+                )
+            )
+            if not finished.rowcount:
+                await session.rollback()
+                raise LeaseLostError(claim.job_id)
+            await session.commit()
 
     async def _claim_next_job(self) -> JobClaim | None:
         """Claim one due job with a conditional UPDATE.
@@ -264,6 +375,12 @@ class SyncWorker:
                         finished_at=utcnow(),
                     )
                 )
+                if not retryable:
+                    await TransactionRefreshService(session).mark_target_failed(
+                        connection.id,
+                        code,
+                        reconnect=retry_class == "owner_action",
+                    )
             await session.commit()
 
     async def _heartbeat(
@@ -307,6 +424,16 @@ class SyncWorker:
         """Return abandoned ordinary work to the queue for a fenced retry."""
 
         async with self._database.session() as session:
+            expired_jobs = (
+                await session.execute(
+                    select(SyncJob)
+                    .where(SyncJob.state == "running")
+                    .where(SyncJob.lease_expires_at <= utcnow())
+                )
+            ).scalars().all()
+            refreshes = TransactionRefreshService(session)
+            for job in expired_jobs:
+                await refreshes.recover_target_for_job(job)
             recovered = await session.execute(
                 update(SyncJob)
                 .where(SyncJob.state == "running")
