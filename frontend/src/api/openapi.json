@@ -386,6 +386,10 @@
             "title": "Production Item Limit",
             "type": "integer"
           },
+          "transaction_refresh_enabled": {
+            "title": "Transaction Refresh Enabled",
+            "type": "boolean"
+          },
           "uses_demo_bank": {
             "title": "Uses Demo Bank",
             "type": "boolean"
@@ -396,7 +400,8 @@
           "production_item_count",
           "production_item_limit",
           "environment",
-          "uses_demo_bank"
+          "uses_demo_bank",
+          "transaction_refresh_enabled"
         ],
         "title": "ConnectionsResponse",
         "type": "object"
@@ -490,6 +495,23 @@
           "window"
         ],
         "title": "CreateTransactionLimitationRequest",
+        "type": "object"
+      },
+      "CreateTransactionRefreshResponse": {
+        "properties": {
+          "coalesced": {
+            "title": "Coalesced",
+            "type": "boolean"
+          },
+          "refresh": {
+            "$ref": "#/components/schemas/TransactionRefreshResponse"
+          }
+        },
+        "required": [
+          "coalesced",
+          "refresh"
+        ],
+        "title": "CreateTransactionRefreshResponse",
         "type": "object"
       },
       "EvaluatedAllTimeWindow": {
@@ -1313,6 +1335,221 @@
         "title": "TransactionMatch",
         "type": "object"
       },
+      "TransactionRefreshResponse": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "running",
+              "succeeded",
+              "partial",
+              "failed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/TransactionRefreshSummaryResponse"
+          },
+          "targets": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionRefreshTargetResponse"
+            },
+            "title": "Targets",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "expires_at",
+          "summary",
+          "targets"
+        ],
+        "title": "TransactionRefreshResponse",
+        "type": "object"
+      },
+      "TransactionRefreshSummaryResponse": {
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "attention": {
+            "title": "Attention",
+            "type": "integer"
+          },
+          "completed": {
+            "title": "Completed",
+            "type": "integer"
+          },
+          "modified": {
+            "title": "Modified",
+            "type": "integer"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "updated": {
+            "title": "Updated",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "completed",
+          "updated",
+          "attention",
+          "added",
+          "modified",
+          "removed"
+        ],
+        "title": "TransactionRefreshSummaryResponse",
+        "type": "object"
+      },
+      "TransactionRefreshTargetResponse": {
+        "properties": {
+          "added": {
+            "title": "Added",
+            "type": "integer"
+          },
+          "bank": {
+            "enum": [
+              "capital-one",
+              "chase",
+              "citi",
+              "wells-fargo"
+            ],
+            "title": "Bank",
+            "type": "string"
+          },
+          "connection_id": {
+            "title": "Connection Id",
+            "type": "string"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "modified": {
+            "title": "Modified",
+            "type": "integer"
+          },
+          "next_refresh_eligible_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Refresh Eligible At"
+          },
+          "refresh_outcome": {
+            "enum": [
+              "not_attempted",
+              "reserved",
+              "dispatching",
+              "accepted",
+              "unsupported",
+              "cooldown",
+              "outcome_unknown",
+              "failed"
+            ],
+            "title": "Refresh Outcome",
+            "type": "string"
+          },
+          "removed": {
+            "title": "Removed",
+            "type": "integer"
+          },
+          "state": {
+            "enum": [
+              "queued",
+              "refreshing",
+              "syncing",
+              "updated",
+              "no_changes",
+              "automatic_updates_only",
+              "cooldown",
+              "reconnect_required",
+              "outcome_unknown",
+              "failed",
+              "disconnected"
+            ],
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id",
+          "bank",
+          "state",
+          "refresh_outcome",
+          "next_refresh_eligible_at",
+          "added",
+          "modified",
+          "removed",
+          "error_code"
+        ],
+        "title": "TransactionRefreshTargetResponse",
+        "type": "object"
+      },
       "UpdateTransactionLimitationRequest": {
         "properties": {
           "card_ids": {
@@ -2048,6 +2285,117 @@
         "summary": "Update Transaction Limitation",
         "tags": [
           "transaction-limitations"
+        ]
+      }
+    },
+    "/api/transaction-refreshes": {
+      "post": {
+        "operationId": "create_transaction_refresh_api_transaction_refreshes_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 128,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "title": "Idempotency-Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTransactionRefreshResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Transaction Refresh",
+        "tags": [
+          "transaction-refreshes"
+        ]
+      }
+    },
+    "/api/transaction-refreshes/active": {
+      "get": {
+        "operationId": "active_transaction_refresh_api_transaction_refreshes_active_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRefreshResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "204": {
+            "description": "No active transaction refresh"
+          }
+        },
+        "summary": "Active Transaction Refresh",
+        "tags": [
+          "transaction-refreshes"
+        ]
+      }
+    },
+    "/api/transaction-refreshes/{refresh_id}": {
+      "get": {
+        "operationId": "get_transaction_refresh_api_transaction_refreshes__refresh_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "refresh_id",
+            "required": true,
+            "schema": {
+              "title": "Refresh Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionRefreshResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Transaction Refresh",
+        "tags": [
+          "transaction-refreshes"
         ]
       }
     },

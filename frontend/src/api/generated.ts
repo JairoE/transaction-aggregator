@@ -261,6 +261,57 @@ export interface paths {
         patch: operations["update_transaction_limitation_api_transaction_limitations__rule_id__patch"];
         trace?: never;
     };
+    "/api/transaction-refreshes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Transaction Refresh */
+        post: operations["create_transaction_refresh_api_transaction_refreshes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transaction-refreshes/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Active Transaction Refresh */
+        get: operations["active_transaction_refresh_api_transaction_refreshes_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transaction-refreshes/{refresh_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Transaction Refresh */
+        get: operations["get_transaction_refresh_api_transaction_refreshes__refresh_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/transactions": {
         parameters: {
             query?: never;
@@ -444,6 +495,8 @@ export interface components {
             production_item_count: number;
             /** Production Item Limit */
             production_item_limit: number;
+            /** Transaction Refresh Enabled */
+            transaction_refresh_enabled: boolean;
             /** Uses Demo Bank */
             uses_demo_bank: boolean;
         };
@@ -480,6 +533,12 @@ export interface components {
             threshold: number;
             /** Window */
             window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"];
+        };
+        /** CreateTransactionRefreshResponse */
+        CreateTransactionRefreshResponse: {
+            /** Coalesced */
+            coalesced: boolean;
+            refresh: components["schemas"]["TransactionRefreshResponse"];
         };
         /** EvaluatedAllTimeWindow */
         EvaluatedAllTimeWindow: {
@@ -801,6 +860,80 @@ export interface components {
             pending: boolean;
             /** Posted Date */
             posted_date: string | null;
+        };
+        /** TransactionRefreshResponse */
+        TransactionRefreshResponse: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Finished At */
+            finished_at: string | null;
+            /** Id */
+            id: string;
+            /** Started At */
+            started_at: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "running" | "succeeded" | "partial" | "failed";
+            summary: components["schemas"]["TransactionRefreshSummaryResponse"];
+            /** Targets */
+            targets: components["schemas"]["TransactionRefreshTargetResponse"][];
+        };
+        /** TransactionRefreshSummaryResponse */
+        TransactionRefreshSummaryResponse: {
+            /** Added */
+            added: number;
+            /** Attention */
+            attention: number;
+            /** Completed */
+            completed: number;
+            /** Modified */
+            modified: number;
+            /** Removed */
+            removed: number;
+            /** Total */
+            total: number;
+            /** Updated */
+            updated: number;
+        };
+        /** TransactionRefreshTargetResponse */
+        TransactionRefreshTargetResponse: {
+            /** Added */
+            added: number;
+            /**
+             * Bank
+             * @enum {string}
+             */
+            bank: "capital-one" | "chase" | "citi" | "wells-fargo";
+            /** Connection Id */
+            connection_id: string;
+            /** Error Code */
+            error_code: string | null;
+            /** Modified */
+            modified: number;
+            /** Next Refresh Eligible At */
+            next_refresh_eligible_at: string | null;
+            /**
+             * Refresh Outcome
+             * @enum {string}
+             */
+            refresh_outcome: "not_attempted" | "reserved" | "dispatching" | "accepted" | "unsupported" | "cooldown" | "outcome_unknown" | "failed";
+            /** Removed */
+            removed: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "queued" | "refreshing" | "syncing" | "updated" | "no_changes" | "automatic_updates_only" | "cooldown" | "reconnect_required" | "outcome_unknown" | "failed" | "disconnected";
         };
         /** UpdateTransactionLimitationRequest */
         UpdateTransactionLimitationRequest: {
@@ -1288,6 +1421,95 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TransactionLimitationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_transaction_refresh_api_transaction_refreshes_post: {
+        parameters: {
+            query?: never;
+            header: {
+                "Idempotency-Key": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTransactionRefreshResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    active_transaction_refresh_api_transaction_refreshes_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionRefreshResponse"];
+                };
+            };
+            /** @description No active transaction refresh */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_transaction_refresh_api_transaction_refreshes__refresh_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                refresh_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionRefreshResponse"];
                 };
             };
             /** @description Validation Error */

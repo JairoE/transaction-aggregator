@@ -488,6 +488,21 @@ class SyncWorker:
             except TimeoutError:
                 continue
 
+    async def run_refresh_cleanup(self) -> None:
+        """Delete one bounded batch per day without delaying app startup."""
+
+        while not self._stopped.is_set():
+            try:
+                async with self._database.session() as session:
+                    await TransactionRefreshService(session).cleanup_expired()
+                    await session.commit()
+            except Exception:  # pragma: no cover - loop must survive
+                logger.exception("transaction_refresh_cleanup_error")
+            try:
+                await asyncio.wait_for(self._stopped.wait(), timeout=24 * 60 * 60)
+            except TimeoutError:
+                continue
+
     def stop(self) -> None:
         self._stopped.set()
 

@@ -41,6 +41,7 @@ async def test_connections_lists_four_supported_banks(
         "wells-fargo",
     ]
     assert body["production_item_limit"] == 10
+    assert body["transaction_refresh_enabled"] is True
     assert all(bank["connected"] is False for bank in body["banks"])
 
 

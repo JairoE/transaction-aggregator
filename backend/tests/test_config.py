@@ -76,6 +76,18 @@ def test_production_accepts_stable_https_public_base_url() -> None:
     settings = Settings(_env_file=None, **values)
 
     assert settings.environment == "production"
+    assert settings.transaction_refresh_enabled is False
+
+
+def test_refresh_feature_can_be_enabled_explicitly() -> None:
+    values = {
+        k.lower(): v
+        for k, v in _env(ENABLE_TRANSACTION_REFRESH="true").items()
+    }
+
+    settings = Settings(_env_file=None, **values)
+
+    assert settings.transaction_refresh_enabled is True
 
 
 def test_production_origin_allowlist_excludes_local_dev_servers() -> None:

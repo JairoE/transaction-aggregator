@@ -15,6 +15,7 @@ from app.api import connections as connections_api
 from app.api import limitations as limitations_api
 from app.api import search as search_api
 from app.api import sync as sync_api
+from app.api import transaction_refreshes as transaction_refreshes_api
 from app.api import webhooks as webhooks_api
 from app.config import Settings, get_settings
 from app.db import Database, create_database
@@ -84,6 +85,7 @@ def create_app(
                 )
                 await session.commit()
             tasks.append(asyncio.create_task(worker.run_forever()))
+            tasks.append(asyncio.create_task(worker.run_refresh_cleanup()))
             tasks.append(
                 asyncio.create_task(
                     worker.run_scheduler(resolved_settings.sync_interval_minutes)
@@ -176,6 +178,7 @@ def create_app(
     app.include_router(limitations_api.router)
     app.include_router(search_api.router)
     app.include_router(sync_api.router)
+    app.include_router(transaction_refreshes_api.router)
     app.include_router(webhooks_api.router)
 
     # Mounted last so the SPA catch-all never shadows an API route.
