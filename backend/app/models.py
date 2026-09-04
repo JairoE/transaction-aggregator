@@ -90,6 +90,9 @@ class Owner(TimestampMixin, Base):
     transaction_limitations: Mapped[list[TransactionLimitation]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
+    transaction_refreshes: Mapped[list[TransactionRefresh]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
 
 
 class OwnerSession(Base):
@@ -121,6 +124,14 @@ class BankConnection(TimestampMixin, Base):
             unique=True,
             sqlite_where=text("lifecycle_status = 'active'"),
         ),
+        CheckConstraint(
+            "sync_requested_generation >= 0 AND sync_completed_generation >= 0",
+            name="ck_bank_connections_sync_generations_nonnegative",
+        ),
+        CheckConstraint(
+            "sync_completed_generation <= sync_requested_generation",
+            name="ck_bank_connections_sync_generation_order",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -145,6 +156,12 @@ class BankConnection(TimestampMixin, Base):
     )
 
     sync_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sync_requested_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    sync_completed_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     consent_expiration_at: Mapped[datetime | None] = mapped_column(
         UtcDateTime, nullable=True
     )
@@ -303,6 +320,11 @@ class SyncJob(Base):
             sqlite_where=text("state IN ('queued', 'running')"),
         ),
         Index("ix_sync_jobs_state_run_after", "state", "run_after"),
+        Index("ix_sync_jobs_state_lease_expires", "state", "lease_expires_at"),
+        CheckConstraint(
+            "target_generation >= 0",
+            name="ck_sync_jobs_target_generation_nonnegative",
+        ),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
@@ -312,10 +334,18 @@ class SyncJob(Base):
     trigger: Mapped[str] = mapped_column(String(16), nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    target_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     run_after: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_token: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(
+        UtcDateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         UtcDateTime, default=utcnow, onupdate=utcnow
@@ -324,6 +354,12 @@ class SyncJob(Base):
 
 class SyncRun(Base):
     __tablename__ = "sync_runs"
+    __table_args__ = (
+        CheckConstraint(
+            "completed_generation >= 0",
+            name="ck_sync_runs_completed_generation_nonnegative",
+        ),
+    )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
     connection_id: Mapped[str] = mapped_column(
@@ -337,11 +373,141 @@ class SyncRun(Base):
     added_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     modified_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     removed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    completed_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     outcome: Mapped[str] = mapped_column(String(16), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     plaid_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     started_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
     finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+
+class TransactionRefresh(Base):
+    __tablename__ = "transaction_refreshes"
+    __table_args__ = (
+        CheckConstraint(
+            "state IN ('queued', 'running', 'succeeded', 'partial', 'failed')",
+            name="ck_transaction_refreshes_state",
+        ),
+        Index("ix_transaction_refreshes_owner_created", "owner_id", "created_at"),
+        Index("ix_transaction_refreshes_expires_at", "expires_at"),
+        Index(
+            "ux_transaction_refreshes_active_owner",
+            "owner_id",
+            unique=True,
+            sqlite_where=text("state IN ('queued', 'running')"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    started_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+
+    owner: Mapped[Owner] = relationship(back_populates="transaction_refreshes")
+    requests: Mapped[list[TransactionRefreshRequest]] = relationship(
+        back_populates="refresh", cascade="all, delete-orphan"
+    )
+    targets: Mapped[list[TransactionRefreshTarget]] = relationship(
+        back_populates="refresh", cascade="all, delete-orphan"
+    )
+
+
+class TransactionRefreshRequest(Base):
+    __tablename__ = "transaction_refresh_requests"
+    __table_args__ = (
+        UniqueConstraint(
+            "owner_id",
+            "idempotency_key_sha256",
+            name="ux_transaction_refresh_requests_owner_key",
+        ),
+        Index("ix_transaction_refresh_requests_refresh_id", "refresh_id"),
+        Index("ix_transaction_refresh_requests_expires_at", "expires_at"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    idempotency_key_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    refresh_id: Mapped[str] = mapped_column(
+        ForeignKey("transaction_refreshes.id", ondelete="CASCADE"), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime, default=utcnow)
+    expires_at: Mapped[datetime] = mapped_column(UtcDateTime, nullable=False)
+
+    refresh: Mapped[TransactionRefresh] = relationship(back_populates="requests")
+
+
+class TransactionRefreshTarget(TimestampMixin, Base):
+    __tablename__ = "transaction_refresh_targets"
+    __table_args__ = (
+        UniqueConstraint(
+            "refresh_id",
+            "connection_id",
+            name="ux_transaction_refresh_targets_refresh_connection",
+        ),
+        CheckConstraint(
+            "state IN ('queued', 'refreshing', 'syncing', 'updated', "
+            "'no_changes', 'automatic_updates_only', 'cooldown', "
+            "'reconnect_required', 'outcome_unknown', 'failed', 'disconnected')",
+            name="ck_transaction_refresh_targets_state",
+        ),
+        CheckConstraint(
+            "refresh_outcome IN ('not_attempted', 'reserved', 'dispatching', "
+            "'accepted', 'unsupported', 'cooldown', 'outcome_unknown', 'failed')",
+            name="ck_transaction_refresh_targets_outcome",
+        ),
+        CheckConstraint(
+            "required_sync_generation >= 0",
+            name="ck_transaction_refresh_targets_generation_nonnegative",
+        ),
+        CheckConstraint(
+            "added_count >= 0 AND modified_count >= 0 AND removed_count >= 0",
+            name="ck_transaction_refresh_targets_counts_nonnegative",
+        ),
+        Index("ix_transaction_refresh_targets_refresh_id", "refresh_id"),
+        Index("ix_transaction_refresh_targets_connection_id", "connection_id"),
+        Index(
+            "ux_transaction_refresh_targets_active_connection",
+            "connection_id",
+            unique=True,
+            sqlite_where=text("state IN ('queued', 'refreshing', 'syncing')"),
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    refresh_id: Mapped[str] = mapped_column(
+        ForeignKey("transaction_refreshes.id", ondelete="CASCADE"), nullable=False
+    )
+    connection_id: Mapped[str] = mapped_column(
+        ForeignKey("bank_connections.id", ondelete="CASCADE"), nullable=False
+    )
+    state: Mapped[str] = mapped_column(String(32), nullable=False, default="queued")
+    refresh_outcome: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="not_attempted"
+    )
+    required_sync_generation: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )
+    provider_request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    next_refresh_eligible_at: Mapped[datetime | None] = mapped_column(
+        UtcDateTime, nullable=True
+    )
+    added_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    modified_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    removed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
+
+    refresh: Mapped[TransactionRefresh] = relationship(back_populates="targets")
 
 
 class WebhookReceipt(Base):
@@ -367,6 +533,9 @@ __all__ = [
     "Transaction",
     "TransactionLimitation",
     "TransactionLimitationCard",
+    "TransactionRefresh",
+    "TransactionRefreshRequest",
+    "TransactionRefreshTarget",
     "UtcDateTime",
     "WebhookReceipt",
     "new_id",
