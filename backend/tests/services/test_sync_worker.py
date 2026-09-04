@@ -39,7 +39,7 @@ async def test_transient_failure_retries_with_capped_backoff(
 ) -> None:
     from app.services.sync_service import enqueue_sync
 
-    job = await enqueue_sync(db_session, connected_connection.id, "manual")
+    job = (await enqueue_sync(db_session, connected_connection.id, "manual")).job
     job_id = job.id
     await db_session.commit()
 
@@ -64,7 +64,7 @@ async def test_owner_action_failure_stops_automatic_retries(
     from app.models import BankConnection
     from app.services.sync_service import enqueue_sync
 
-    job = await enqueue_sync(db_session, connected_connection.id, "manual")
+    job = (await enqueue_sync(db_session, connected_connection.id, "manual")).job
     job_id = job.id
     await db_session.commit()
 
@@ -86,7 +86,7 @@ async def test_exhausted_retries_fail_the_job(
 ) -> None:
     from app.services.sync_service import enqueue_sync
 
-    job = await enqueue_sync(db_session, connected_connection.id, "manual")
+    job = (await enqueue_sync(db_session, connected_connection.id, "manual")).job
     job.attempts = len(BACKOFF_SECONDS)
     job_id = job.id
     await db_session.commit()

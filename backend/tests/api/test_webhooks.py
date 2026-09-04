@@ -5,7 +5,7 @@ import json
 from httpx import AsyncClient
 from sqlalchemy import select
 
-from app.models import SyncJob, WebhookReceipt
+from app.models import BankConnection, SyncJob, WebhookReceipt
 
 
 def _payload(item_id: str, code: str = "SYNC_UPDATES_AVAILABLE") -> dict[str, object]:
@@ -56,6 +56,13 @@ async def test_replayed_webhook_creates_one_receipt_and_one_job(
     body = json.dumps(_payload(connected_item_id))
     headers = {"Plaid-Verification": "signed", "Content-Type": "application/json"}
 
+    connection = (
+        await db_session.execute(
+            select(BankConnection).where(BankConnection.plaid_item_id == connected_item_id)
+        )
+    ).scalars().one()
+    starting_generation = connection.sync_requested_generation
+
     first = await client.post("/api/webhooks/plaid", content=body, headers=headers)
     second = await client.post("/api/webhooks/plaid", content=body, headers=headers)
 
@@ -66,6 +73,9 @@ async def test_replayed_webhook_creates_one_receipt_and_one_job(
         await db_session.execute(select(SyncJob).where(SyncJob.state == "queued"))
     ).scalars().all()
     assert len(jobs) == 1
+    await db_session.refresh(connection)
+    assert connection.sync_requested_generation == starting_generation + 2
+    assert jobs[0].target_generation == connection.sync_requested_generation
 
 
 async def test_unknown_item_is_accepted_without_a_job(

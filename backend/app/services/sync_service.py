@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError
@@ -52,6 +53,14 @@ class SyncSummary:
     ending_cursor: str
 
 
+@dataclass(frozen=True)
+class EnqueuedSync:
+    """The coalesced job and the generation assigned to this request."""
+
+    job: SyncJob
+    requested_generation: int
+
+
 async def active_job_for(
     session: AsyncSession, connection_id: str
 ) -> SyncJob | None:
@@ -67,23 +76,54 @@ async def active_job_for(
 
 async def enqueue_sync(
     session: AsyncSession, connection_id: str, trigger: str
-) -> SyncJob:
-    """Queue a sync for one connection, or return the job already in flight."""
+) -> EnqueuedSync:
+    """Advance the connection generation and coalesce work into one active job."""
+
+    requested_generation = (
+        await session.execute(
+            update(BankConnection)
+            .where(BankConnection.id == connection_id)
+            .where(BankConnection.lifecycle_status == "active")
+            .values(
+                sync_requested_generation=BankConnection.sync_requested_generation + 1
+            )
+            .returning(BankConnection.sync_requested_generation)
+        )
+    ).scalar_one_or_none()
+    if requested_generation is None:
+        raise AppError(
+            "CONNECTION_NOT_ACTIVE", "That connection is not active.", 409
+        )
 
     existing = await active_job_for(session, connection_id)
     if existing is not None:
-        return existing
+        existing.target_generation = requested_generation
+        await session.flush()
+        return EnqueuedSync(existing, requested_generation)
 
     job = SyncJob(
         connection_id=connection_id,
         trigger=trigger,
         state="queued",
         attempts=0,
+        target_generation=requested_generation,
         run_after=utcnow(),
     )
-    session.add(job)
-    await session.flush()
-    return job
+    try:
+        async with session.begin_nested():
+            session.add(job)
+            await session.flush()
+    except IntegrityError:
+        # A database without SQLite's single-writer serialization can race
+        # between the active-job read and insert. The unique partial index is
+        # the final arbiter; fold the request into the winner.
+        existing = await active_job_for(session, connection_id)
+        if existing is None:
+            raise
+        existing.target_generation = requested_generation
+        await session.flush()
+        return EnqueuedSync(existing, requested_generation)
+    return EnqueuedSync(job, requested_generation)
 
 
 async def enqueue_stale_connections(
@@ -102,9 +142,6 @@ async def enqueue_stale_connections(
     for connection in connections:
         last = connection.last_successful_sync_at
         if last is not None and last > threshold:
-            continue
-        if await active_job_for(session, connection.id) is not None:
-            # A queued or running job already covers this connection.
             continue
         await enqueue_sync(session, connection.id, trigger)
         queued += 1
@@ -414,6 +451,7 @@ class SyncService:
 
 __all__ = [
     "ACTIVE_JOB_STATES",
+    "EnqueuedSync",
     "active_job_for",
     "REFRESH_COOLDOWN_MINUTES",
     "SyncService",
