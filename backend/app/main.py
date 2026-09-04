@@ -66,10 +66,16 @@ def create_app(
         worker: SyncWorker | None = None
         if resolved_settings.enable_background_worker:
             worker = SyncWorker(
-                app.state.database, app.state.plaid_gateway, app.state.token_cipher
+                app.state.database,
+                app.state.plaid_gateway,
+                app.state.token_cipher,
+                lease_seconds=resolved_settings.sync_lease_seconds,
+                heartbeat_seconds=resolved_settings.sync_heartbeat_seconds,
+                provider_timeout_seconds=resolved_settings.provider_timeout_seconds,
             )
             app.state.sync_worker = worker
             # Startup recovery: anything not synced within the window is queued.
+            await worker.recover_expired()
             async with app.state.database.session() as session:
                 await enqueue_stale_connections(
                     session,

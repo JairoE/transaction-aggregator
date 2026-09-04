@@ -131,3 +131,29 @@ def test_display_stale_window_accepts_an_explicit_override() -> None:
     )
 
     assert settings.stale_display_minutes == 90
+
+
+@pytest.mark.parametrize(
+    ("overrides", "message"),
+    [
+        (
+            {"SYNC_HEARTBEAT_SECONDS": "60", "SYNC_LEASE_SECONDS": "60"},
+            "heartbeat",
+        ),
+        (
+            {
+                "PROVIDER_TIMEOUT_SECONDS": "50",
+                "SYNC_HEARTBEAT_SECONDS": "15",
+                "SYNC_LEASE_SECONDS": "60",
+            },
+            "provider timeout",
+        ),
+    ],
+)
+def test_worker_timing_settings_preserve_a_lease_safety_margin(
+    overrides: dict[str, str], message: str
+) -> None:
+    values = {k.lower(): v for k, v in _env(**overrides).items()}
+
+    with pytest.raises(ValidationError, match=message):
+        Settings(_env_file=None, **values)
