@@ -265,6 +265,58 @@ sqlite3 backend/data/transactions.db ".headers on" ".mode column" \
   "SELECT connection_id, outcome, added_count, modified_count, removed_count, error_code, started_at, finished_at FROM sync_runs ORDER BY started_at DESC LIMIT 10;"
 ```
 
+### Enable and operate transaction refresh
+
+The dashboard action is enabled automatically in `demo` and `test`. Before
+enabling it in production, confirm that the Plaid account has Transactions
+Refresh access, confirm its billing terms, and record the actual per-Item and
+per-client limits. Then set:
+
+```bash
+ENABLE_TRANSACTION_REFRESH=true
+SYNC_LEASE_SECONDS=60
+SYNC_HEARTBEAT_SECONDS=15
+PROVIDER_TIMEOUT_SECONDS=40
+```
+
+Restart the single application process after changing these values. The POST
+endpoint only records work; the in-process worker makes provider calls. Run
+exactly one worker and scheduler with SQLite. The lease must remain longer than
+the provider timeout plus one heartbeat interval, or settings validation stops
+startup.
+
+Refresh dispatches are persisted before the provider call and limited to one
+per connection in each 15-minute eligibility window. `outcome_unknown` means a
+request may have reached Plaid but no reliable response returned; it consumes
+the cooldown and must not be automatically retried. The worker still performs
+sync-only reconciliation. `automatic_updates_only` means the institution does
+not support on-demand refresh. `reconnect_required` requires owner action in
+**Manage connections**.
+
+Inspect recent fleet runs without exposing provider credentials:
+
+```bash
+sqlite3 backend/data/transactions.db ".headers on" ".mode column" \
+  "SELECT id, state, created_at, started_at, finished_at, expires_at FROM transaction_refreshes ORDER BY created_at DESC LIMIT 20;"
+```
+
+```bash
+sqlite3 backend/data/transactions.db ".headers on" ".mode column" \
+  "SELECT refresh_id, connection_id, state, refresh_outcome, error_code, next_refresh_eligible_at FROM transaction_refresh_targets ORDER BY created_at DESC LIMIT 50;"
+```
+
+Terminal runs and their hashed idempotency mappings remain queryable for seven
+days. Cleanup deletes at most 100 expired terminal runs once per day and never
+deletes active work.
+
+Do not scale this SQLite queue horizontally. Before supporting multiple owners,
+more than 50 active refresh-capable Items, more than one application host, or
+provider utilization above 50% of the account limit, move work claiming and
+idempotency to PostgreSQL and add a shared provider-budget limiter. Roll back
+the feature immediately by setting `ENABLE_TRANSACTION_REFRESH=false`; queued
+ordinary synchronization remains available and cached dashboard reads continue
+to work.
+
 ## 10. Disconnecting a bank
 
 `DELETE /api/connections/{id}` (`ConnectionService.disconnect`) does, in order:
