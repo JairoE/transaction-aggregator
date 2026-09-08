@@ -1,14 +1,17 @@
 import { Link } from 'react-router-dom'
+import { formatDateWithYear } from './format'
 import type { UseTransactionRefreshResult } from './useTransactionRefresh'
 
 interface RefreshTransactionsControlProps {
   refresh: UseTransactionRefreshResult
   isOnline: boolean
+  latestTransactionDate: string | null
 }
 
 export function RefreshTransactionsControl({
   refresh,
   isOnline,
+  latestTransactionDate,
 }: RefreshTransactionsControlProps) {
   const { run } = refresh
   const changes = (run?.summary.added ?? 0) + (run?.summary.modified ?? 0)
@@ -43,7 +46,11 @@ export function RefreshTransactionsControl({
       <div className="transaction-refresh__action">
         <div>
           <h2>Latest transactions</h2>
-          <p>Ask connected banks for available updates, then check the local cache.</p>
+          <p>
+            {latestTransactionDate
+              ? `Latest transactions since ${formatDateWithYear(latestTransactionDate)}`
+              : 'No cached transactions yet'}
+          </p>
         </div>
         <button
           type="button"

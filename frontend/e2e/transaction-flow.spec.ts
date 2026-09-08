@@ -249,6 +249,8 @@ test('owner connects four banks and searches every card at once', async ({ page 
 
   await page.getByRole('button', { name: 'View cards' }).click()
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
+  await expect(page.getByText(/^Latest transactions since [A-Z][a-z]{2} \d{1,2}, \d{4}$/)).toBeVisible()
+  await expect(page.getByText(/Showing recent cached transactions/i)).toHaveCount(0)
 
   const refresh = page.getByRole('button', { name: 'Check for new transactions' })
   await refresh.click()

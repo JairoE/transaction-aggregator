@@ -17,6 +17,7 @@ import {
   fetchCardTransactions,
   fetchTransactionSearch,
   type AllTransactionRow,
+  type TransactionMatch,
 } from './api'
 import { CacheStatusBanner } from './CacheStatusBanner'
 import { CardGrid, type DashboardCardGroup } from './CardGrid'
@@ -65,6 +66,14 @@ function uniqueRows(rows: AllTransactionRow[]): AllTransactionRow[] {
     ids.add(row.transaction.id)
     return true
   })
+}
+
+function newestTransactionDate(transactions: TransactionMatch[]): string | null {
+  return transactions.reduce<string | null>((latest, transaction) => {
+    const transactionDate = transaction.posted_date ?? transaction.authorized_date
+    if (!transactionDate || (latest && transactionDate <= latest)) return latest
+    return transactionDate
+  }, null)
 }
 
 export function DashboardPage() {
@@ -248,6 +257,14 @@ export function DashboardPage() {
   }, [owner, allTransactionsQuery.isSuccess, aggregateData, submittedQuery])
 
   const activeData = view === 'cards' ? searchQuery.data : aggregateData
+  const latestCachedTransactionDate = useMemo(
+    () => newestTransactionDate(
+      view === 'cards'
+        ? groups.flatMap((group) => group.transactions)
+        : (aggregateData?.rows ?? []).map((row) => row.transaction),
+    ),
+    [view, groups, aggregateData],
+  )
   const cardCount = activeData?.card_count ?? connectionFleet.cardCount
   const bankCount =
     view === 'cards'
@@ -320,6 +337,7 @@ export function DashboardPage() {
             <RefreshTransactionsControl
               refresh={transactionRefresh}
               isOnline={isOnline}
+              latestTransactionDate={latestCachedTransactionDate}
             />
         )}
 
@@ -335,14 +353,12 @@ export function DashboardPage() {
         )}
 
         <div className="dashboard-page__meta">
-          <p className="dashboard-page__meta-text">
-            <DotIcon />
-            {hasQuery
-              ? buildResultsSummary(submittedQuery, activeData?.total_matches ?? 0, cardCount)
-              : view === 'transactions'
-                ? 'Showing recent cached transactions across all cards'
-                : 'Showing recent cached transactions on every card'}
-          </p>
+          {hasQuery && (
+            <p className="dashboard-page__meta-text">
+              <DotIcon />
+              {buildResultsSummary(submittedQuery, activeData?.total_matches ?? 0, cardCount)}
+            </p>
+          )}
           {hasQuery ? (
             <button
               type="button"

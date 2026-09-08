@@ -494,7 +494,7 @@ describe('connection recovery states', () => {
   it('never persists the CSRF token or session data to sessionStorage', async () => {
     server.use(authenticatedSessionHandler(), searchHandler(() => recentSearchResponse()))
     await renderDashboard()
-    await screen.findByText(/showing recent cached transactions on every card/i)
+    await screen.findByRole('region', { name: /ending in 4812/i })
 
     await waitFor(() => expect(window.sessionStorage.length).toBeGreaterThan(0))
 

@@ -114,6 +114,64 @@ describe('dashboard card grid', () => {
     }
   })
 
+  it('shows the newest cached transaction date without the redundant cache summary', async () => {
+    server.use(
+      searchHandler(() => {
+        const response = recentSearchResponse()
+        response.groups[0].transactions[0].posted_date = '2026-08-20'
+        response.groups[1].transactions[0].posted_date = null
+        response.groups[1].transactions[0].authorized_date = '2026-08-22'
+        return response
+      }),
+      connectionsHandler(
+        makeConnectionsResponse([
+          {
+            bank: 'capital-one',
+            connected: true,
+            connection_id: 'conn-capital-one',
+            lifecycle_status: 'active',
+            card_count: 2,
+          },
+        ]),
+      ),
+    )
+
+    await renderDashboard()
+
+    expect(screen.getByText('Latest transactions since Aug 22, 2026')).toBeInTheDocument()
+    expect(screen.queryByText(/showing recent cached transactions/i)).not.toBeInTheDocument()
+  })
+
+  it('explains when an active connection has no cached transactions yet', async () => {
+    server.use(
+      searchHandler(() => {
+        const response = recentSearchResponse()
+        response.groups = response.groups.map((group) => ({
+          ...group,
+          transactions: [],
+          match_count: 0,
+        }))
+        response.total_matches = 0
+        return response
+      }),
+      connectionsHandler(
+        makeConnectionsResponse([
+          {
+            bank: 'capital-one',
+            connected: true,
+            connection_id: 'conn-capital-one',
+            lifecycle_status: 'active',
+            card_count: 2,
+          },
+        ]),
+      ),
+    )
+
+    await renderDashboard()
+
+    expect(screen.getByText('No cached transactions yet')).toBeInTheDocument()
+  })
+
   it('renders a bank-specific outlined preview with the visible identity of every card', async () => {
     server.use(searchHandler(() => recentSearchResponse()))
     await renderDashboard()

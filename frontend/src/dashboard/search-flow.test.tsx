@@ -100,7 +100,7 @@ describe('explicit search submission flow', () => {
 
     await user.click(screen.getByRole('button', { name: /clear search/i }))
 
-    await screen.findByText(/showing recent cached transactions on every card/i)
+    expect(await screen.findAllByText(/everyday purchase/i)).toHaveLength(8)
     expect(screen.getByRole('heading', { name: /your credit cards/i })).toBeInTheDocument()
     expect(screen.getByRole('searchbox', { name: /search transactions/i })).toHaveValue('')
   })
