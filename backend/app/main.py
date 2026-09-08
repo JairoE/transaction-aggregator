@@ -73,6 +73,9 @@ def create_app(
                 lease_seconds=resolved_settings.sync_lease_seconds,
                 heartbeat_seconds=resolved_settings.sync_heartbeat_seconds,
                 provider_timeout_seconds=resolved_settings.provider_timeout_seconds,
+                transaction_refresh_enabled=(
+                    resolved_settings.transaction_refresh_enabled
+                ),
             )
             app.state.sync_worker = worker
             # Startup recovery: anything not synced within the window is queued.

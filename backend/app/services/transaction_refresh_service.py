@@ -236,6 +236,8 @@ class TransactionRefreshService:
         job_id: str,
         lease_token: str,
         cipher: TokenCipher,
+        *,
+        provider_refresh_enabled: bool = True,
     ) -> RefreshPreparation | None:
         target = await self._owned_target(target_id, job_id, lease_token)
         if target is None or target.refresh_outcome != "reserved":
@@ -248,6 +250,11 @@ class TransactionRefreshService:
             target.finished_at = utcnow()
             await self.derive_run(target.refresh_id)
             return RefreshPreparation(target.id, None, should_sync=False)
+
+        if not provider_refresh_enabled:
+            target.state = "syncing"
+            target.refresh_outcome = "not_attempted"
+            return RefreshPreparation(target.id, None)
 
         now = utcnow()
         eligible_at = (
