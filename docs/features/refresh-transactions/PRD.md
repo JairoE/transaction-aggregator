@@ -271,12 +271,12 @@ Alert locally when an active run exceeds 15 minutes, a running lease repeatedly 
 ## Rollout or Migration
 
 1. Add one additive Alembic migration for refresh-run/request/target tables, sync generations, and lease fields. Existing transactions and cursors require no data rewrite; generation backfills follow the migration contract in the implementation plan.
-2. Ship backend orchestration and the API behind `ENABLE_TRANSACTION_REFRESH=false` by default outside demo/test. Startup validates that Transactions Refresh is intentionally enabled before production dispatches are possible.
+2. Ship backend orchestration and the API enabled by default.
 3. Enable deterministic demo/test behavior and complete concurrency, crash-recovery, API, accessibility, and cache-invalidation verification.
-4. Confirm the Plaid account has Transactions Refresh access and accepts its separate billing before enabling production.
+4. Confirm the Plaid account has Transactions Refresh access and accepts its separate billing before production use.
 5. Enable for the local owner and monitor target outcomes, durations, rate limits, and unknown attempts through at least ten runs.
 
-Rollback disables new run creation and hides the action while allowing already queued work to finish sync-only. The additive tables and columns remain in place so rollback does not discard audit or recovery state.
+Rollback reverts the deployment while preserving additive tables and columns, so audit and recovery state are not discarded.
 
 ## Open Questions
 

@@ -88,10 +88,9 @@ export function DashboardPage() {
 
   const connectionsQuery = useQuery(connectionsQueryOptions)
   const canRefreshTransactions = Boolean(
-    connectionsQuery.data?.transaction_refresh_enabled &&
-      connectionsQuery.data.banks.some(
-        (bank) => bank.connected && bank.lifecycle_status === 'active',
-      ),
+    connectionsQuery.data?.banks.some(
+      (bank) => bank.connected && bank.lifecycle_status === 'active',
+    ),
   )
   const resetContinuationState = useCallback(() => {
     setPageState({})

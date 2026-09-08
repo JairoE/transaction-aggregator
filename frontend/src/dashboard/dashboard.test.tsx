@@ -88,20 +88,28 @@ describe('dashboard card grid', () => {
     expect(createCalls).toBe(1)
   })
 
-  it('hides the action when the server capability is disabled', async () => {
+  it('shows the action despite a legacy disabled server capability', async () => {
     server.use(
       searchHandler(() => recentSearchResponse()),
-      connectionsHandler(
-        makeConnectionsResponse(
-          [{ bank: 'capital-one', connected: true, connection_id: 'conn-1', card_count: 1 }],
-          { transaction_refresh_enabled: false },
-        ),
+      http.get('/api/connections', () =>
+        HttpResponse.json({
+          ...makeConnectionsResponse([
+            {
+              bank: 'capital-one',
+              connected: true,
+              connection_id: 'conn-1',
+              lifecycle_status: 'active',
+              card_count: 1,
+            },
+          ]),
+          transaction_refresh_enabled: false,
+        }),
       ),
     )
 
     await renderDashboard()
 
-    expect(screen.queryByRole('button', { name: /check for new transactions/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /check for new transactions/i })).toBeInTheDocument()
   })
 
   it('renders all eight cards under exactly one search input on initial load', async () => {

@@ -54,7 +54,6 @@ export function makeConnectionsResponse(
     production_item_count: 0,
     production_item_limit: 10,
     environment: 'demo',
-    transaction_refresh_enabled: true,
     uses_demo_bank: true,
     ...extra,
   }
