@@ -74,6 +74,38 @@ def test_all_time_limitation_schema_enforces_window_and_threshold(
         connection.close()
 
 
+def test_net_total_schema_requires_cents_threshold(
+    migrated_sqlite_path: str,
+    seeded_card: dict[str, str],
+) -> None:
+    connection = sqlite3.connect(migrated_sqlite_path)
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO transaction_limitations "
+                "(id, owner_id, keyword, normalized_keyword, threshold, metric, "
+                "total_threshold_cents, card_scope, window_type, is_enabled, "
+                "created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "missing-net-total-threshold",
+                    "owner-1",
+                    "Paze",
+                    "paze",
+                    1,
+                    "net_total_usd",
+                    None,
+                    "all_cards",
+                    "all_time",
+                    1,
+                    NOW,
+                    NOW,
+                ),
+            )
+    finally:
+        connection.close()
+
+
 def test_rule_card_associations_are_unique_and_cascade(
     migrated_sqlite_path: str,
     seeded_card: dict[str, str],
@@ -215,3 +247,38 @@ def test_fixed_downgrade_refuses_data_loss(tmp_path) -> None:  # type: ignore[no
 
     with pytest.raises(RuntimeError, match="Convert or delete fixed"):
         command.downgrade(config, "0004")
+
+
+def test_net_total_migration_preserves_existing_count_rules(tmp_path) -> None:  # type: ignore[no-untyped-def]
+    path = tmp_path / "net-total-upgrade.db"
+    config = alembic_config(f"sqlite+pysqlite:///{path}")
+    command.upgrade(config, "0007")
+    connection = sqlite3.connect(path)
+    try:
+        connection.execute(
+            "INSERT INTO owners (id, email, password_hash, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?)",
+            ("owner-1", "owner@example.com", "hash", NOW, NOW),
+        )
+        connection.execute(
+            "INSERT INTO transaction_limitations "
+            "(id, owner_id, keyword, normalized_keyword, threshold, card_scope, "
+            "window_type, is_enabled, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("rule-1", "owner-1", "Paze", "paze", 10, "all_cards", "all_time", 1, NOW, NOW),
+        )
+        connection.commit()
+    finally:
+        connection.close()
+
+    command.upgrade(config, "0008")
+
+    connection = sqlite3.connect(path)
+    try:
+        row = connection.execute(
+            "SELECT metric, threshold, total_threshold_cents "
+            "FROM transaction_limitations WHERE id = 'rule-1'"
+        ).fetchone()
+        assert row == ("count", 10, None)
+    finally:
+        connection.close()

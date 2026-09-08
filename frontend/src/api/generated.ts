@@ -529,8 +529,16 @@ export interface components {
             is_enabled: boolean;
             /** Keyword */
             keyword: string;
+            /**
+             * Metric
+             * @default count
+             * @enum {string}
+             */
+            metric: "count" | "net_total_usd";
             /** Threshold */
-            threshold: number;
+            threshold?: number | null;
+            /** Total Threshold Cents */
+            total_threshold_cents?: number | null;
             /** Window */
             window: components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"];
         };
@@ -788,12 +796,23 @@ export interface components {
             keyword: string;
             /** Match Count */
             match_count: number;
+            /** Match Total Cents */
+            match_total_cents: number | null;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "count" | "net_total_usd";
             /** Pending Count */
             pending_count: number;
+            /** Pending Total Cents */
+            pending_total_cents: number | null;
             /** Rule Id */
             rule_id: string;
             /** Threshold */
-            threshold: number;
+            threshold: number | null;
+            /** Total Threshold Cents */
+            total_threshold_cents: number | null;
             /** Window */
             window: components["schemas"]["EvaluatedAllTimeWindow"] | components["schemas"]["EvaluatedRollingWindow"] | components["schemas"]["EvaluatedFixedWindow"];
         };
@@ -824,10 +843,17 @@ export interface components {
             is_enabled: boolean;
             /** Keyword */
             keyword: string;
+            /**
+             * Metric
+             * @enum {string}
+             */
+            metric: "count" | "net_total_usd";
             /** Needs Card Selection */
             needs_card_selection: boolean;
             /** Threshold */
-            threshold: number;
+            threshold: number | null;
+            /** Total Threshold Cents */
+            total_threshold_cents: number | null;
             /**
              * Updated At
              * Format: date-time
@@ -945,8 +971,12 @@ export interface components {
             is_enabled?: boolean | null;
             /** Keyword */
             keyword?: string | null;
+            /** Metric */
+            metric?: ("count" | "net_total_usd") | null;
             /** Threshold */
             threshold?: number | null;
+            /** Total Threshold Cents */
+            total_threshold_cents?: number | null;
             /** Window */
             window?: (components["schemas"]["AllTimeWindow"] | components["schemas"]["RollingWindow"] | components["schemas"]["FixedWindow"]) | null;
         };

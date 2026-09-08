@@ -245,26 +245,55 @@ TransactionWindow = Annotated[
 
 class CreateTransactionLimitationRequest(BaseModel):
     keyword: str = Field(min_length=1, max_length=100)
-    threshold: int = Field(ge=1, le=10_000)
+    metric: Literal["count", "net_total_usd"] = "count"
+    threshold: int | None = Field(default=None, ge=1, le=10_000)
+    total_threshold_cents: int | None = Field(
+        default=None, ge=1, le=2_147_483_647
+    )
     card_scope: Literal["all_cards", "selected_cards"]
     card_ids: list[str] = Field(default_factory=list, max_length=100)
     window: TransactionWindow
     is_enabled: bool = True
 
+    @model_validator(mode="after")
+    def metric_has_its_threshold(self) -> Self:
+        if self.metric == "count":
+            if self.threshold is None or self.total_threshold_cents is not None:
+                raise ValueError("Count rules require only threshold")
+        elif self.threshold is not None or self.total_threshold_cents is None:
+            raise ValueError("Net-total rules require only total_threshold_cents")
+        return self
+
 
 class UpdateTransactionLimitationRequest(BaseModel):
     keyword: str | None = Field(default=None, min_length=1, max_length=100)
     threshold: int | None = Field(default=None, ge=1, le=10_000)
+    metric: Literal["count", "net_total_usd"] | None = None
+    total_threshold_cents: int | None = Field(
+        default=None, ge=1, le=2_147_483_647
+    )
     card_scope: Literal["all_cards", "selected_cards"] | None = None
     card_ids: list[str] | None = Field(default=None, max_length=100)
     window: TransactionWindow | None = None
     is_enabled: bool | None = None
 
+    @model_validator(mode="after")
+    def complete_metric_updates_have_their_threshold(self) -> Self:
+        if self.metric == "count":
+            if self.threshold is None or self.total_threshold_cents is not None:
+                raise ValueError("Count rules require only threshold")
+        elif self.metric == "net_total_usd":
+            if self.threshold is not None or self.total_threshold_cents is None:
+                raise ValueError("Net-total rules require only total_threshold_cents")
+        return self
+
 
 class TransactionLimitationResponse(BaseModel):
     id: str
     keyword: str
-    threshold: int
+    metric: Literal["count", "net_total_usd"]
+    threshold: int | None
+    total_threshold_cents: int | None
     card_scope: Literal["all_cards", "selected_cards"]
     card_ids: list[str]
     window: TransactionWindow
@@ -315,10 +344,14 @@ EvaluatedTransactionWindow = Annotated[
 class TransactionLimitAlertResponse(BaseModel):
     rule_id: str
     keyword: str
-    threshold: int
+    metric: Literal["count", "net_total_usd"]
+    threshold: int | None
+    total_threshold_cents: int | None
     card: CardResponse
     match_count: int
     pending_count: int
+    match_total_cents: int | None
+    pending_total_cents: int | None
     window: EvaluatedTransactionWindow
 
 

@@ -227,6 +227,13 @@ class TransactionLimitation(TimestampMixin, Base):
             "threshold BETWEEN 1 AND 10000", name="ck_limitation_threshold"
         ),
         CheckConstraint(
+            "(metric = 'count' AND total_threshold_cents IS NULL) OR "
+            "(metric = 'net_total_usd' "
+            "AND total_threshold_cents IS NOT NULL "
+            "AND total_threshold_cents BETWEEN 1 AND 2147483647)",
+            name="ck_limitation_metric_threshold",
+        ),
+        CheckConstraint(
             "card_scope IN ('all_cards', 'selected_cards')",
             name="ck_limitation_card_scope",
         ),
@@ -250,6 +257,12 @@ class TransactionLimitation(TimestampMixin, Base):
     keyword: Mapped[str] = mapped_column(String(100), nullable=False)
     normalized_keyword: Mapped[str] = mapped_column(String(100), nullable=False)
     threshold: Mapped[int] = mapped_column(Integer, nullable=False)
+    metric: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="count", server_default="count"
+    )
+    total_threshold_cents: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
     card_scope: Mapped[str] = mapped_column(String(24), nullable=False)
     window_type: Mapped[str] = mapped_column(
         String(16), nullable=False, default="all_time"

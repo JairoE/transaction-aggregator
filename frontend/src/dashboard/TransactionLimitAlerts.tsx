@@ -1,5 +1,5 @@
 import type { TransactionLimitAlertResponse } from '../limitations/api'
-import { formatDateWithYear, formatShortDate } from './format'
+import { formatAmount, formatDateWithYear, formatShortDate } from './format'
 
 interface Props {
   alerts: TransactionLimitAlertResponse[]
@@ -27,10 +27,21 @@ export function TransactionLimitAlerts({ alerts }: Props) {
     <div className="transaction-limit-alerts">
       {alerts.map((alert) => (
         <div className="transaction-limit-alert" role="alert" key={alert.rule_id}>
-          <strong>{alert.match_count} transactions match “{alert.keyword}”</strong>
-          <span>
-            Threshold: {alert.threshold} · {alert.pending_count} pending · {windowSummary(alert)}
-          </span>
+          {alert.metric === 'net_total_usd' ? (
+            <>
+              <strong>{formatAmount(alert.match_total_cents ?? 0, 'USD')} net total matches “{alert.keyword}”</strong>
+              <span>
+                Threshold: {formatAmount(alert.total_threshold_cents ?? 0, 'USD')} · {formatAmount(alert.pending_total_cents ?? 0, 'USD')} pending · {windowSummary(alert)}
+              </span>
+            </>
+          ) : (
+            <>
+              <strong>{alert.match_count} transactions match “{alert.keyword}”</strong>
+              <span>
+                Threshold: {alert.threshold} · {alert.pending_count} pending · {windowSummary(alert)}
+              </span>
+            </>
+          )}
           <span className="transaction-limit-alert__notice">Informational only — transactions are not blocked.</span>
         </div>
       ))}

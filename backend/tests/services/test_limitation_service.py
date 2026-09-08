@@ -104,6 +104,86 @@ async def test_all_time_alerts_are_per_card_and_include_pending(
     assert second.id not in {alert.card.id for alert in result.alerts}
 
 
+async def test_net_total_alerts_include_pending_amounts_and_offset_refunds(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    first, _ = await _seed_cards(db_session, owner)
+    db_session.add_all(
+        [
+            Transaction(
+                plaid_transaction_id="paze-refund",
+                card_account_id=first.id,
+                authorized_date=date(2026, 8, 21),
+                posted_date=date(2026, 8, 21),
+                merchant_name="Paze",
+                name="Paze refund",
+                original_description="PAZE*REFUND",
+                amount_cents=-500,
+                currency_code="USD",
+                pending=False,
+                search_text="paze paze refund paze*refund",
+            ),
+            Transaction(
+                plaid_transaction_id="paze-cad-purchase",
+                card_account_id=first.id,
+                authorized_date=date(2026, 8, 21),
+                posted_date=date(2026, 8, 21),
+                merchant_name="Paze",
+                name="Paze Canadian purchase",
+                original_description="PAZE*CANADA",
+                amount_cents=50_000,
+                currency_code="CAD",
+                pending=False,
+                search_text="paze paze canadian purchase paze*canada",
+            ),
+        ]
+    )
+    await db_session.flush()
+
+    service = LimitationService(db_session)
+    await service.create_rule(
+        owner.id,
+        _all_time_request(
+            metric="net_total_usd",
+            threshold=None,
+            total_threshold_cents=1500,
+        ),
+    )
+
+    result = await service.evaluate_active_alerts(owner.id)
+
+    assert len(result.alerts) == 1
+    alert = result.alerts[0]
+    assert alert.metric == "net_total_usd"
+    assert alert.match_count == 3
+    assert alert.match_total_cents == 1500
+    assert alert.pending_total_cents == 1000
+    assert alert.total_threshold_cents == 1500
+
+
+async def test_corrupt_net_total_rule_is_ignored_during_evaluation(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+    created = await service.create_rule(
+        owner.id,
+        _all_time_request(
+            metric="net_total_usd",
+            threshold=None,
+            total_threshold_cents=1500,
+        ),
+    )
+    created.rule.total_threshold_cents = None
+
+    with db_session.no_autoflush:
+        result = await service.evaluate_active_alerts(owner.id)
+
+    assert result.alerts == []
+
+
 async def test_multiple_overlapping_and_short_keywords_are_counted_independently(
     db_session,
     owner,
