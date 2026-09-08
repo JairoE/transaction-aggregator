@@ -378,6 +378,18 @@
             "title": "Environment",
             "type": "string"
           },
+          "last_transaction_sync_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Transaction Sync Attempt At"
+          },
           "production_item_count": {
             "title": "Production Item Count",
             "type": "integer"

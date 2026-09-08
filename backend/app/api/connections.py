@@ -54,6 +54,7 @@ async def list_connections(
         environment=summary.environment,
         uses_demo_bank=summary.environment in {"demo", "test"},
         transaction_refresh_enabled=settings.transaction_refresh_enabled,
+        last_transaction_sync_attempt_at=summary.last_transaction_sync_attempt_at,
     )
 
 

@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import UTC, datetime
 
 from httpx import AsyncClient
+
+from app.models import SyncRun
 
 
 async def _exchange(client: AsyncClient, csrf: str, bank: str, institution_id: str,
@@ -42,7 +45,30 @@ async def test_connections_lists_four_supported_banks(
     ]
     assert body["production_item_limit"] == 10
     assert body["transaction_refresh_enabled"] is True
+    assert body["last_transaction_sync_attempt_at"] is None
     assert all(bank["connected"] is False for bank in body["banks"])
+
+
+async def test_connections_exposes_latest_transaction_sync_attempt(
+    authenticated_client: AsyncClient, connected_connection, db_session
+) -> None:
+    attempted_at = datetime(2026, 9, 8, 14, 32, tzinfo=UTC)
+    db_session.add(
+        SyncRun(
+            connection_id=connected_connection.id,
+            outcome="failed",
+            error_code="PROVIDER_UNAVAILABLE",
+            started_at=attempted_at,
+        )
+    )
+    await db_session.commit()
+
+    response = await authenticated_client.get("/api/connections")
+
+    assert response.status_code == 200
+    assert response.json()["last_transaction_sync_attempt_at"] == (
+        "2026-09-08T14:32:00Z"
+    )
 
 
 async def test_link_token_requires_csrf(authenticated_client: AsyncClient) -> None:

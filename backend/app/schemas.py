@@ -79,6 +79,7 @@ class ConnectionsResponse(BaseModel):
     environment: str
     uses_demo_bank: bool
     transaction_refresh_enabled: bool
+    last_transaction_sync_attempt_at: datetime | None = None
 
 
 RefreshRunState = Literal["queued", "running", "succeeded", "partial", "failed"]

@@ -491,6 +491,8 @@ export interface components {
             banks: components["schemas"]["BankConnectionResponse"][];
             /** Environment */
             environment: string;
+            /** Last Transaction Sync Attempt At */
+            last_transaction_sync_attempt_at?: string | null;
             /** Production Item Count */
             production_item_count: number;
             /** Production Item Limit */
