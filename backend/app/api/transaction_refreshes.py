@@ -98,6 +98,12 @@ async def serialize_refresh(
     "",
     response_model=CreateTransactionRefreshResponse,
     status_code=202,
+    responses={
+        200: {
+            "model": CreateTransactionRefreshResponse,
+            "description": "Terminal idempotency-key replay",
+        }
+    },
     dependencies=[CsrfDep],
 )
 async def create_transaction_refresh(

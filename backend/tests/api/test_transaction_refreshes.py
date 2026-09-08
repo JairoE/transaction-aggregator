@@ -14,6 +14,19 @@ def _headers(csrf_token: str, key: str = "refresh-key") -> dict[str, str]:
     }
 
 
+async def test_openapi_documents_both_create_response_statuses(app) -> None:
+    responses = app.openapi()["paths"]["/api/transaction-refreshes"]["post"][
+        "responses"
+    ]
+
+    assert responses["200"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/CreateTransactionRefreshResponse"
+    }
+    assert responses["202"]["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/CreateTransactionRefreshResponse"
+    }
+
+
 async def test_create_requires_authentication(client: AsyncClient) -> None:
     response = await client.post(
         "/api/transaction-refreshes",

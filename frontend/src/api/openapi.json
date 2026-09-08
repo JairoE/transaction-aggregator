@@ -2318,6 +2318,16 @@
           }
         ],
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateTransactionRefreshResponse"
+                }
+              }
+            },
+            "description": "Terminal idempotency-key replay"
+          },
           "202": {
             "content": {
               "application/json": {

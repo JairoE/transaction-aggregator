@@ -1447,6 +1447,15 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Terminal idempotency-key replay */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateTransactionRefreshResponse"];
+                };
+            };
             /** @description Successful Response */
             202: {
                 headers: {
