@@ -466,11 +466,40 @@
             "title": "Keyword",
             "type": "string"
           },
+          "metric": {
+            "default": "count",
+            "enum": [
+              "count",
+              "net_total_usd"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
           "threshold": {
-            "maximum": 10000.0,
-            "minimum": 1.0,
-            "title": "Threshold",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 10000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "total_threshold_cents": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Threshold Cents"
           },
           "window": {
             "discriminator": {
@@ -497,7 +526,6 @@
         },
         "required": [
           "keyword",
-          "threshold",
           "card_scope",
           "window"
         ],
@@ -1086,17 +1114,65 @@
             "title": "Match Count",
             "type": "integer"
           },
+          "match_total_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Total Cents"
+          },
+          "metric": {
+            "enum": [
+              "count",
+              "net_total_usd"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
           "pending_count": {
             "title": "Pending Count",
             "type": "integer"
+          },
+          "pending_total_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pending Total Cents"
           },
           "rule_id": {
             "title": "Rule Id",
             "type": "string"
           },
           "threshold": {
-            "title": "Threshold",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "total_threshold_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Threshold Cents"
           },
           "window": {
             "discriminator": {
@@ -1124,10 +1200,14 @@
         "required": [
           "rule_id",
           "keyword",
+          "metric",
           "threshold",
+          "total_threshold_cents",
           "card",
           "match_count",
           "pending_count",
+          "match_total_cents",
+          "pending_total_cents",
           "window"
         ],
         "title": "TransactionLimitAlertResponse",
@@ -1191,13 +1271,39 @@
             "title": "Keyword",
             "type": "string"
           },
+          "metric": {
+            "enum": [
+              "count",
+              "net_total_usd"
+            ],
+            "title": "Metric",
+            "type": "string"
+          },
           "needs_card_selection": {
             "title": "Needs Card Selection",
             "type": "boolean"
           },
           "threshold": {
-            "title": "Threshold",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "total_threshold_cents": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Threshold Cents"
           },
           "updated_at": {
             "format": "date-time",
@@ -1230,7 +1336,9 @@
         "required": [
           "id",
           "keyword",
+          "metric",
           "threshold",
+          "total_threshold_cents",
           "card_scope",
           "card_ids",
           "window",
@@ -1613,6 +1721,21 @@
             ],
             "title": "Keyword"
           },
+          "metric": {
+            "anyOf": [
+              {
+                "enum": [
+                  "count",
+                  "net_total_usd"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
           "threshold": {
             "anyOf": [
               {
@@ -1625,6 +1748,19 @@
               }
             ],
             "title": "Threshold"
+          },
+          "total_threshold_cents": {
+            "anyOf": [
+              {
+                "maximum": 2147483647.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Threshold Cents"
           },
           "window": {
             "anyOf": [

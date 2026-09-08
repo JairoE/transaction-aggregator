@@ -56,6 +56,48 @@ describe('dashboard transaction-limit alerts', () => {
     expect(within(otherCard).queryByRole('alert')).not.toBeInTheDocument()
   })
 
+  it('shows a USD net total that includes pending amounts and refunds', async () => {
+    const card = DASHBOARD_CARDS[0]
+    server.use(
+      authenticatedSessionHandler(),
+      searchHandler(() => recentSearchResponse()),
+      alertsHandler({
+        alerts: [{
+          rule_id: 'rule-net-total',
+          card,
+          keyword: 'Paze',
+          metric: 'net_total_usd',
+          threshold: null,
+          total_threshold_cents: 1500,
+          match_count: 3,
+          pending_count: 1,
+          match_total_cents: 1500,
+          pending_total_cents: 1000,
+          window: {
+            type: 'all_time',
+            days: null,
+            start_date: null,
+            end_date: null,
+            effective_start_date: null,
+            effective_end_date: null,
+          },
+        }],
+        evaluated_at: '2026-08-22T12:00:00Z',
+        as_of_date: '2026-08-22',
+        cache_as_of: '2026-08-22T11:59:00Z',
+      }),
+    )
+
+    renderAppAt('/dashboard')
+
+    const alert = await within(await screen.findByRole('region', {
+      name: new RegExp(`ending in ${card.mask}`, 'i'),
+    })).findByRole('alert')
+    expect(alert).toHaveTextContent(/\$15\.00 net total matches “Paze”/i)
+    expect(alert).toHaveTextContent(/threshold: \$15\.00/i)
+    expect(alert).toHaveTextContent(/\$10\.00 pending/i)
+  })
+
   it('keeps cards usable when alert evaluation fails', async () => {
     server.use(
       authenticatedSessionHandler(),

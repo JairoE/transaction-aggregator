@@ -67,7 +67,7 @@ export function TransactionLimitationsPage() {
     <AppShell currentStep={4} statusPillText="Informational limits" actionLink={{ label: 'View cards', to: '/dashboard' }}>
       <main className="limitations-page">
         <p className="eyebrow">Transaction limitations</p>
-        <h1>Set transaction-count alerts</h1>
+        <h1>Set transaction alerts</h1>
         <p className="limitations-page__notice"><strong>Informational alerts only.</strong> These rules cannot block or decline card transactions.</p>
         {query.isPending ? <p role="status">Loading transaction limits…</p> : query.isError ? (
           <p role="alert">We could not load transaction limits. Try again.</p>

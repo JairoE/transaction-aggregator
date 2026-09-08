@@ -1,4 +1,5 @@
 import type { TransactionLimitationResponse } from './api'
+import { formatAmount } from '../dashboard/format'
 
 export type BusyRuleAction = {
   ruleId: string
@@ -23,6 +24,13 @@ function windowSummary(rule: TransactionLimitationResponse): string {
   return 'All available history'
 }
 
+function thresholdSummary(rule: TransactionLimitationResponse): string {
+  if (rule.metric === 'net_total_usd') {
+    return `${formatAmount(rule.total_threshold_cents ?? 0, 'USD')} net total`
+  }
+  return `${rule.threshold} transactions`
+}
+
 export function TransactionLimitationList({ rules, busyAction, onEdit, onToggle, onDelete }: Props) {
   if (rules.length === 0) {
     return <p className="limitation-list__empty">No transaction limitation rules yet.</p>
@@ -42,7 +50,7 @@ export function TransactionLimitationList({ rules, busyAction, onEdit, onToggle,
           return <article className="limitation-rule" key={rule.id}>
             <div>
               <h3>{rule.keyword}</h3>
-              <p>{rule.threshold} transactions · {windowSummary(rule)}</p>
+              <p>{thresholdSummary(rule)} · {windowSummary(rule)}</p>
               <p>{rule.card_scope === 'all_cards' ? 'Every card independently' : `${rule.card_ids.length} selected cards`}</p>
               {rule.needs_card_selection && (
                 <p className="limitation-rule__warning" role="status">

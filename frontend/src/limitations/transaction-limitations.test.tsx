@@ -22,7 +22,9 @@ const card = {
 const createdRule = {
   id: 'rule-1',
   keyword: 'Paze',
+  metric: 'count',
   threshold: 10,
+  total_threshold_cents: null,
   card_scope: 'all_cards',
   card_ids: [],
   window: { type: 'all_time' },
@@ -58,6 +60,7 @@ describe('transaction limitations page', () => {
 
     expect(body).toEqual({
       keyword: 'Paze',
+      metric: 'count',
       threshold: 10,
       card_scope: 'all_cards',
       card_ids: [],
@@ -67,6 +70,43 @@ describe('transaction limitations page', () => {
     expect(await screen.findByRole('heading', { name: 'Paze' })).toBeInTheDocument()
     expect(screen.getAllByText(/all available history/i)).not.toHaveLength(0)
     await runAxeSmokeTest(container)
+  })
+
+  it('creates a USD net-total rule', async () => {
+    let body: unknown
+    const netTotalRule = {
+      ...createdRule,
+      id: 'rule-net-total',
+      metric: 'net_total_usd',
+      threshold: null,
+      total_threshold_cents: 1500,
+    }
+    server.use(
+      authenticatedSessionHandler(),
+      http.get('/api/transaction-limitations', () => HttpResponse.json({ rules: [], cards: [card] })),
+      http.post('/api/transaction-limitations', async ({ request }) => {
+        body = await request.json()
+        return HttpResponse.json(netTotalRule, { status: 201 })
+      }),
+    )
+    const user = userEvent.setup()
+    renderAppAt('/transaction-limitations')
+
+    await user.type(await screen.findByLabelText(/keyword or phrase/i), 'Paze')
+    await user.click(screen.getByRole('radio', { name: /net transaction total/i }))
+    await user.clear(screen.getByLabelText(/net total threshold/i))
+    await user.type(screen.getByLabelText(/net total threshold/i), '15.00')
+    await user.click(screen.getByRole('button', { name: /save rule/i }))
+
+    expect(body).toEqual({
+      keyword: 'Paze',
+      metric: 'net_total_usd',
+      total_threshold_cents: 1500,
+      card_scope: 'all_cards',
+      card_ids: [],
+      window: { type: 'all_time' },
+      is_enabled: true,
+    })
   })
 
   it('prefills a selected-card rule from a transaction shortcut', async () => {
@@ -211,6 +251,7 @@ describe('transaction limitations page', () => {
 
     expect(body).toEqual({
       keyword: 'Dunkin’ Donuts',
+      metric: 'count',
       threshold: 5,
       card_scope: 'all_cards',
       card_ids: [],

@@ -23,6 +23,22 @@ interface ValidationError {
 }
 
 const VALIDATION_ERROR_ID = 'limitation-form-error'
+const MAX_TOTAL_THRESHOLD_CENTS = 2_147_483_647
+
+function centsToUsdInput(cents: number | null | undefined): string {
+  return ((cents ?? 100) / 100).toFixed(2)
+}
+
+function parseUsdCents(value: string): number | null {
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(value.trim())
+  if (!match) {
+    return null
+  }
+  const dollars = Number(match[1])
+  const cents = Number((match[2] ?? '').padEnd(2, '0'))
+  const total = dollars * 100 + cents
+  return Number.isSafeInteger(total) ? total : null
+}
 
 export function TransactionLimitationForm({
   cards,
@@ -34,7 +50,9 @@ export function TransactionLimitationForm({
   onCancel,
 }: Props) {
   const [keyword, setKeyword] = useState(initialRule?.keyword ?? initialKeyword ?? '')
+  const [metric, setMetric] = useState<'count' | 'net_total_usd'>(initialRule?.metric ?? 'count')
   const [threshold, setThreshold] = useState(String(initialRule?.threshold ?? 1))
+  const [totalThreshold, setTotalThreshold] = useState(centsToUsdInput(initialRule?.total_threshold_cents))
   const [scope, setScope] = useState<'all_cards' | 'selected_cards'>(
     initialRule?.card_scope ?? (initialCardId ? 'selected_cards' : 'all_cards'),
   )
@@ -57,7 +75,9 @@ export function TransactionLimitationForm({
 
   useEffect(() => {
     setKeyword(initialRule?.keyword ?? initialKeyword ?? '')
+    setMetric(initialRule?.metric ?? 'count')
     setThreshold(String(initialRule?.threshold ?? 1))
+    setTotalThreshold(centsToUsdInput(initialRule?.total_threshold_cents))
     setScope(initialRule?.card_scope ?? (initialCardId ? 'selected_cards' : 'all_cards'))
     setCardIds(initialRule?.card_ids ?? (initialCardId ? [initialCardId] : []))
     setWindowType(initialRule?.window.type ?? 'all_time')
@@ -69,13 +89,23 @@ export function TransactionLimitationForm({
 
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    const parsedThreshold = Number(threshold)
     if (!keyword.trim()) {
       setError({ field: 'keyword', message: 'Enter a keyword or phrase.' })
       return
     }
-    if (!Number.isInteger(parsedThreshold) || parsedThreshold < 1 || parsedThreshold > 10_000) {
-      setError({ field: 'threshold', message: 'Enter a transaction threshold from 1 through 10,000.' })
+    const parsedThreshold = Number(threshold)
+    const parsedTotalThreshold = parseUsdCents(totalThreshold)
+    if (metric === 'count') {
+      if (!Number.isInteger(parsedThreshold) || parsedThreshold < 1 || parsedThreshold > 10_000) {
+        setError({ field: 'threshold', message: 'Enter a transaction threshold from 1 through 10,000.' })
+        return
+      }
+    } else if (
+      parsedTotalThreshold === null
+      || parsedTotalThreshold < 1
+      || parsedTotalThreshold > MAX_TOTAL_THRESHOLD_CENTS
+    ) {
+      setError({ field: 'threshold', message: 'Enter a net total threshold in USD.' })
       return
     }
     if (scope === 'selected_cards' && cardIds.length === 0) {
@@ -101,7 +131,10 @@ export function TransactionLimitationForm({
     setError(null)
     onSubmit({
       keyword: keyword.trim(),
-      threshold: parsedThreshold,
+      metric,
+      ...(metric === 'count'
+        ? { threshold: parsedThreshold }
+        : { total_threshold_cents: parsedTotalThreshold as number }),
       card_scope: scope,
       card_ids: scope === 'all_cards' ? [] : cardIds,
       window: windowType === 'rolling'
@@ -129,16 +162,49 @@ export function TransactionLimitationForm({
         />
       </div>
       <div className="form-field">
-        <label htmlFor="limitation-threshold">Transaction threshold</label>
+        <fieldset
+          className="limitation-form__fieldset"
+          aria-describedby={error?.field === 'threshold' ? VALIDATION_ERROR_ID : undefined}
+        >
+          <legend>Alert type</legend>
+          <label>
+            <input
+              type="radio"
+              name="limitation-metric"
+              checked={metric === 'count'}
+              onChange={() => setMetric('count')}
+            />
+            Transaction count
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="limitation-metric"
+              checked={metric === 'net_total_usd'}
+              onChange={() => setMetric('net_total_usd')}
+            />
+            Net transaction total (USD)
+          </label>
+        </fieldset>
+        <label htmlFor="limitation-threshold">
+          {metric === 'count' ? 'Transaction threshold' : 'Net total threshold (USD)'}
+        </label>
         <input
           id="limitation-threshold"
           aria-describedby={error?.field === 'threshold' ? VALIDATION_ERROR_ID : undefined}
           aria-invalid={error?.field === 'threshold' || undefined}
-          type="number"
+          type={metric === 'count' ? 'number' : 'text'}
           min={1}
-          max={10_000}
-          value={threshold}
-          onChange={(event) => setThreshold(event.target.value)}
+          max={metric === 'count' ? 10_000 : undefined}
+          inputMode={metric === 'count' ? 'numeric' : 'decimal'}
+          value={metric === 'count' ? threshold : totalThreshold}
+          onChange={(event) => {
+            if (metric === 'count') {
+              setThreshold(event.target.value)
+            } else {
+              setTotalThreshold(event.target.value)
+            }
+          }}
         />
       </div>
       <fieldset
