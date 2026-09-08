@@ -119,6 +119,35 @@ async def test_limitation_mutations_require_csrf(
     assert response.json()["code"] == "CSRF_INVALID"
 
 
+async def test_partial_updates_reject_a_threshold_for_the_wrong_metric(
+    authenticated_client: AsyncClient,
+    csrf_token: str,
+) -> None:
+    created = await authenticated_client.post(
+        "/api/transaction-limitations",
+        headers={"X-CSRF-Token": csrf_token},
+        json={
+            "keyword": "Paze",
+            "metric": "count",
+            "threshold": 2,
+            "card_scope": "all_cards",
+            "card_ids": [],
+            "window": {"type": "all_time"},
+            "is_enabled": True,
+        },
+    )
+    assert created.status_code == 201, created.text
+
+    response = await authenticated_client.patch(
+        f"/api/transaction-limitations/{created.json()['id']}",
+        headers={"X-CSRF-Token": csrf_token},
+        json={"total_threshold_cents": 1500},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == "REQUEST_INVALID"
+
+
 async def test_create_rolling_rule_returns_effective_window(
     authenticated_client: AsyncClient,
     csrf_token: str,

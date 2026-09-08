@@ -164,18 +164,34 @@ class LimitationService:
         if payload.card_scope is not None or payload.card_ids is not None:
             await self._validate_cards(owner_id, card_scope, card_ids)
 
+        metric = payload.metric or rule.metric
+        if payload.threshold is not None and metric != "count":
+            raise AppError(
+                "REQUEST_INVALID",
+                "Net-total rules cannot use a transaction-count threshold.",
+                422,
+            )
+        if (
+            payload.total_threshold_cents is not None
+            and metric != "net_total_usd"
+        ):
+            raise AppError(
+                "REQUEST_INVALID",
+                "Count rules cannot use a net-total threshold.",
+                422,
+            )
+
         if payload.keyword is not None:
             rule.keyword, rule.normalized_keyword = _normalize_keyword(payload.keyword)
-        if payload.metric is not None:
-            rule.metric = payload.metric
-            if payload.metric == "count":
-                rule.total_threshold_cents = None
-            else:
-                rule.threshold = 1
-        if payload.threshold is not None:
-            rule.threshold = payload.threshold
-        if payload.total_threshold_cents is not None:
-            rule.total_threshold_cents = payload.total_threshold_cents
+        rule.metric = metric
+        if metric == "count":
+            rule.threshold = payload.threshold or rule.threshold
+            rule.total_threshold_cents = None
+        else:
+            rule.threshold = 1
+            rule.total_threshold_cents = (
+                payload.total_threshold_cents or rule.total_threshold_cents
+            )
         if payload.card_scope is not None:
             rule.card_scope = payload.card_scope
         if payload.window is not None:

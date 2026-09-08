@@ -109,20 +109,35 @@ async def test_net_total_alerts_include_pending_amounts_and_offset_refunds(
     owner,
 ) -> None:  # type: ignore[no-untyped-def]
     first, _ = await _seed_cards(db_session, owner)
-    db_session.add(
-        Transaction(
-            plaid_transaction_id="paze-refund",
-            card_account_id=first.id,
-            authorized_date=date(2026, 8, 21),
-            posted_date=date(2026, 8, 21),
-            merchant_name="Paze",
-            name="Paze refund",
-            original_description="PAZE*REFUND",
-            amount_cents=-500,
-            currency_code="USD",
-            pending=False,
-            search_text="paze paze refund paze*refund",
-        )
+    db_session.add_all(
+        [
+            Transaction(
+                plaid_transaction_id="paze-refund",
+                card_account_id=first.id,
+                authorized_date=date(2026, 8, 21),
+                posted_date=date(2026, 8, 21),
+                merchant_name="Paze",
+                name="Paze refund",
+                original_description="PAZE*REFUND",
+                amount_cents=-500,
+                currency_code="USD",
+                pending=False,
+                search_text="paze paze refund paze*refund",
+            ),
+            Transaction(
+                plaid_transaction_id="paze-cad-purchase",
+                card_account_id=first.id,
+                authorized_date=date(2026, 8, 21),
+                posted_date=date(2026, 8, 21),
+                merchant_name="Paze",
+                name="Paze Canadian purchase",
+                original_description="PAZE*CANADA",
+                amount_cents=50_000,
+                currency_code="CAD",
+                pending=False,
+                search_text="paze paze canadian purchase paze*canada",
+            ),
+        ]
     )
     await db_session.flush()
 
