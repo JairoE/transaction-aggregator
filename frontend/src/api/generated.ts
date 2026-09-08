@@ -497,8 +497,6 @@ export interface components {
             production_item_count: number;
             /** Production Item Limit */
             production_item_limit: number;
-            /** Transaction Refresh Enabled */
-            transaction_refresh_enabled: boolean;
             /** Uses Demo Bank */
             uses_demo_bank: boolean;
         };

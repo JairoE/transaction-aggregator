@@ -398,10 +398,6 @@
             "title": "Production Item Limit",
             "type": "integer"
           },
-          "transaction_refresh_enabled": {
-            "title": "Transaction Refresh Enabled",
-            "type": "boolean"
-          },
           "uses_demo_bank": {
             "title": "Uses Demo Bank",
             "type": "boolean"
@@ -412,8 +408,7 @@
           "production_item_count",
           "production_item_limit",
           "environment",
-          "uses_demo_bank",
-          "transaction_refresh_enabled"
+          "uses_demo_bank"
         ],
         "title": "ConnectionsResponse",
         "type": "object"

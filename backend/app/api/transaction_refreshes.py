@@ -9,8 +9,8 @@ from typing import Annotated
 from fastapi import APIRouter, Header, Request, Response
 from sqlalchemy import select
 
-from app.dependencies import CsrfDep, OwnerDep, SessionDep, SettingsDep
-from app.errors import AppError, OriginInvalidError
+from app.dependencies import CsrfDep, OwnerDep, SessionDep
+from app.errors import OriginInvalidError
 from app.models import BankConnection, TransactionRefresh, TransactionRefreshTarget
 from app.schemas import (
     CreateTransactionRefreshResponse,
@@ -112,17 +112,10 @@ async def create_transaction_refresh(
     idempotency_key: IdempotencyKey,
     owner: OwnerDep,
     session: SessionDep,
-    settings: SettingsDep,
 ) -> CreateTransactionRefreshResponse:
     started = perf_counter()
     if request.headers.get("origin") is None:
         raise OriginInvalidError()
-    if not settings.transaction_refresh_enabled:
-        raise AppError(
-            "TRANSACTION_REFRESH_DISABLED",
-            "Checking for new transactions is not enabled.",
-            409,
-        )
     run, coalesced = await TransactionRefreshService(session).create_or_coalesce(
         owner.id, idempotency_key
     )

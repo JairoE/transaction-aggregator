@@ -265,15 +265,13 @@ sqlite3 backend/data/transactions.db ".headers on" ".mode column" \
   "SELECT connection_id, outcome, added_count, modified_count, removed_count, error_code, started_at, finished_at FROM sync_runs ORDER BY started_at DESC LIMIT 10;"
 ```
 
-### Enable and operate transaction refresh
+### Operate transaction refresh
 
-The dashboard action is enabled automatically in `demo` and `test`. Before
-enabling it in production, confirm that the Plaid account has Transactions
-Refresh access, confirm its billing terms, and record the actual per-Item and
-per-client limits. Then set:
+Before operating transaction refresh in production, confirm that the Plaid
+account has Transactions Refresh access, confirm its billing terms, and record
+the actual per-Item and per-client limits. Configure the worker timing with:
 
 ```bash
-ENABLE_TRANSACTION_REFRESH=true
 SYNC_LEASE_SECONDS=60
 SYNC_HEARTBEAT_SECONDS=15
 PROVIDER_TIMEOUT_SECONDS=40
@@ -313,9 +311,8 @@ Do not scale this SQLite queue horizontally. Before supporting multiple owners,
 more than 50 active refresh-capable Items, more than one application host, or
 provider utilization above 50% of the account limit, move work claiming and
 idempotency to PostgreSQL and add a shared provider-budget limiter. Roll back
-the feature immediately by setting `ENABLE_TRANSACTION_REFRESH=false`; queued
-ordinary synchronization remains available and cached dashboard reads continue
-to work.
+by reverting the deployment; queued ordinary synchronization remains available
+and cached dashboard reads continue to work.
 
 ## 10. Disconnecting a bank
 

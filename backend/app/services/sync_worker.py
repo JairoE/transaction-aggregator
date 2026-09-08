@@ -58,7 +58,6 @@ class SyncWorker:
         lease_seconds: float | None = None,
         heartbeat_seconds: float | None = None,
         provider_timeout_seconds: float | None = None,
-        transaction_refresh_enabled: bool | None = None,
     ) -> None:
         from app.config import get_settings
 
@@ -84,11 +83,6 @@ class SyncWorker:
             provider_timeout_seconds
             if provider_timeout_seconds is not None
             else settings.provider_timeout_seconds
-        )
-        self._transaction_refresh_enabled = (
-            settings.transaction_refresh_enabled
-            if transaction_refresh_enabled is None
-            else transaction_refresh_enabled
         )
         self._stopped = asyncio.Event()
 
@@ -204,7 +198,6 @@ class SyncWorker:
                 claim.job_id,
                 claim.lease_token,
                 self.cipher,
-                provider_refresh_enabled=self._transaction_refresh_enabled,
             )
             await session.commit()
         if preparation is None or preparation.access_token is None:

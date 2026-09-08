@@ -133,46 +133,6 @@ async def test_cooldown_target_skips_paid_call_but_still_syncs(
     assert fake_plaid.refreshed_tokens == []
 
 
-async def test_disabled_refresh_worker_drains_queued_target_as_sync_only(
-    database,
-    db_session,
-    owner,
-    connected_connection,
-    drained_initial_job,
-    fake_plaid,
-    token_cipher,
-) -> None:
-    from app.services.sync_worker import SyncWorker
-    from app.services.transaction_refresh_service import TransactionRefreshService
-
-    run, _ = await TransactionRefreshService(db_session).create_or_coalesce(
-        owner.id, "disabled-before-dispatch"
-    )
-    await db_session.commit()
-    disabled_worker = SyncWorker(
-        database,
-        fake_plaid,
-        token_cipher,
-        transaction_refresh_enabled=False,
-    )
-
-    assert await disabled_worker.run_once() is True
-
-    target = (
-        await db_session.execute(
-            select(TransactionRefreshTarget).where(
-                TransactionRefreshTarget.refresh_id == run.id
-            )
-        )
-    ).scalars().one()
-    await db_session.refresh(run)
-    assert run.state == "succeeded"
-    assert target.state == "no_changes"
-    assert target.refresh_outcome == "not_attempted"
-    assert fake_plaid.refreshed_tokens == []
-    assert fake_plaid.sync_call_count(connected_connection.access_token) == 1
-
-
 async def test_unsupported_provider_is_remembered_after_sync_only_fallback(
     sync_worker,
     db_session,

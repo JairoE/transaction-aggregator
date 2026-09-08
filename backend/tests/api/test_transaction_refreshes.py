@@ -201,23 +201,6 @@ async def test_missing_expired_and_cross_owner_ids_share_not_found_contract(
     assert {response.json()["code"] for response in responses} == {"NOT_FOUND"}
 
 
-async def test_disabled_feature_returns_stable_conflict(
-    authenticated_client: AsyncClient,
-    csrf_token: str,
-    connected_connection,
-    drained_initial_job,
-    app,
-) -> None:
-    app.state.settings.enable_transaction_refresh = False
-
-    response = await authenticated_client.post(
-        "/api/transaction-refreshes", headers=_headers(csrf_token)
-    )
-
-    assert response.status_code == 409
-    assert response.json()["code"] == "TRANSACTION_REFRESH_DISABLED"
-
-
 async def test_no_active_connections_is_a_stable_conflict(
     authenticated_client: AsyncClient, csrf_token: str
 ) -> None:

@@ -258,7 +258,7 @@ class CreateTransactionRefreshResponse(BaseModel):
     refresh: TransactionRefreshResponse
 ```
 
-POST returns `CreateTransactionRefreshResponse`: 202 for newly accepted or active/coalesced work and 200 for an idempotent replay of a terminal retained run. GET by ID returns `TransactionRefreshResponse` with 200. GET active returns that response or 204 when absent. Anonymous access returns 401; invalid CSRF/Origin returns 403; missing/expired/cross-owner IDs return the same 404; a missing or malformed idempotency header returns 422; no active connections returns 409/`NO_ACTIVE_CONNECTIONS`; a disabled feature returns 409/`TRANSACTION_REFRESH_DISABLED`. The existing connections response adds `transaction_refresh_enabled: bool` so the browser hides the action when disabled.
+POST returns `CreateTransactionRefreshResponse`: 202 for newly accepted or active/coalesced work and 200 for an idempotent replay of a terminal retained run. GET by ID returns that response with 200. GET active returns that response or 204 when absent. Anonymous access returns 401; invalid CSRF/Origin returns 403; missing/expired/cross-owner IDs return the same 404; a missing or malformed idempotency header returns 422; no active connections returns 409/`NO_ACTIVE_CONNECTIONS`.
 
 ### Frontend boundary
 
@@ -529,13 +529,12 @@ git commit -m "feat: orchestrate on-demand transaction refresh"
 
 Assert exact status and response keys for:
 
-- anonymous, missing CSRF, invalid Origin, missing/malformed idempotency key, and disabled feature;
+- anonymous, missing CSRF, invalid Origin, and missing/malformed idempotency key;
 - new 202, same-key replay, concurrent different-key coalescing with a durable mapping for every key, and terminal 200 replay;
 - active-run discovery returning 200 during work and 204 when idle, including reload/second-tab use;
 - no active connections;
 - owner-safe not-found behavior for missing, expired, and another owner's IDs;
 - every target/run enum value and stable error envelope;
-- true/false `transaction_refresh_enabled` values on the connections response;
 - 100 concurrent POSTs yielding one run; and
 - a fake gateway barrier proving POST completes before any provider call, with p95 below 200 ms across local test requests; and
 - create/coalesce/completion logs and acknowledgement timing contain no plaintext idempotency key or financial data.
