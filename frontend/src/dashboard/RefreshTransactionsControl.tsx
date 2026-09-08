@@ -1,23 +1,26 @@
 import { Link } from 'react-router-dom'
-import { formatDateWithYear } from './format'
+import { formatExactTimestamp, formatRelativeTimestamp } from './format'
 import type { UseTransactionRefreshResult } from './useTransactionRefresh'
 
 interface RefreshTransactionsControlProps {
   refresh: UseTransactionRefreshResult
   isOnline: boolean
-  latestTransactionDate: string | null
+  lastAttemptedAt: string | null
 }
 
 export function RefreshTransactionsControl({
   refresh,
   isOnline,
-  latestTransactionDate,
+  lastAttemptedAt,
 }: RefreshTransactionsControlProps) {
   const { run } = refresh
   const changes = (run?.summary.added ?? 0) + (run?.summary.modified ?? 0)
   const unsupported = run?.targets.some(
     (target) => target.state === 'automatic_updates_only',
   )
+  const exactAttemptTime = lastAttemptedAt
+    ? formatExactTimestamp(lastAttemptedAt)
+    : null
 
   let result: React.ReactNode = null
   if (!isOnline) {
@@ -47,9 +50,17 @@ export function RefreshTransactionsControl({
         <div>
           <h2>Latest transactions</h2>
           <p>
-            {latestTransactionDate
-              ? `Latest transactions since ${formatDateWithYear(latestTransactionDate)}`
-              : 'No cached transactions yet'}
+            {lastAttemptedAt && exactAttemptTime ? (
+              <time
+                dateTime={lastAttemptedAt}
+                title={exactAttemptTime}
+                aria-label={`Last checked ${exactAttemptTime}`}
+              >
+                Last checked: {formatRelativeTimestamp(lastAttemptedAt)}
+              </time>
+            ) : (
+              'Not checked yet'
+            )}
           </p>
         </div>
         <button

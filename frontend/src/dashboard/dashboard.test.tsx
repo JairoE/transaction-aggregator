@@ -114,35 +114,35 @@ describe('dashboard card grid', () => {
     }
   })
 
-  it('shows the newest cached transaction date without the redundant cache summary', async () => {
+  it('shows the latest sync attempt with relative and exact timestamps', async () => {
+    const attemptedAt = new Date(Date.now() - 2 * 60_000).toISOString()
     server.use(
-      searchHandler(() => {
-        const response = recentSearchResponse()
-        response.groups[0].transactions[0].posted_date = '2026-08-20'
-        response.groups[1].transactions[0].posted_date = null
-        response.groups[1].transactions[0].authorized_date = '2026-08-22'
-        return response
-      }),
+      searchHandler(() => recentSearchResponse()),
       connectionsHandler(
-        makeConnectionsResponse([
-          {
-            bank: 'capital-one',
-            connected: true,
-            connection_id: 'conn-capital-one',
-            lifecycle_status: 'active',
-            card_count: 2,
-          },
-        ]),
+        makeConnectionsResponse(
+          [
+            {
+              bank: 'capital-one',
+              connected: true,
+              connection_id: 'conn-capital-one',
+              lifecycle_status: 'active',
+              card_count: 2,
+            },
+          ],
+          { last_transaction_sync_attempt_at: attemptedAt },
+        ),
       ),
     )
 
     await renderDashboard()
 
-    expect(screen.getByText('Latest transactions since Aug 22, 2026')).toBeInTheDocument()
+    const lastChecked = screen.getByText('Last checked: 2 minutes ago')
+    expect(lastChecked).toHaveAttribute('datetime', attemptedAt)
+    expect(lastChecked).toHaveAttribute('title')
     expect(screen.queryByText(/showing recent cached transactions/i)).not.toBeInTheDocument()
   })
 
-  it('explains when an active connection has no cached transactions yet', async () => {
+  it('explains when an active connection has not attempted a sync yet', async () => {
     server.use(
       searchHandler(() => {
         const response = recentSearchResponse()
@@ -169,7 +169,7 @@ describe('dashboard card grid', () => {
 
     await renderDashboard()
 
-    expect(screen.getByText('No cached transactions yet')).toBeInTheDocument()
+    expect(screen.getByText('Not checked yet')).toBeInTheDocument()
   })
 
   it('renders a bank-specific outlined preview with the visible identity of every card', async () => {
