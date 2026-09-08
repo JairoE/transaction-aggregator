@@ -60,10 +60,14 @@ class EvaluatedWindow:
 class ActiveTransactionLimitAlert:
     rule_id: str
     keyword: str
-    threshold: int
+    metric: str
+    threshold: int | None
+    total_threshold_cents: int | None
     card: CardRow
     match_count: int
     pending_count: int
+    match_total_cents: int | None
+    pending_total_cents: int | None
     window: EvaluatedWindow
 
 
@@ -120,7 +124,9 @@ class LimitationService:
             owner_id=owner_id,
             keyword=keyword,
             normalized_keyword=normalized_keyword,
-            threshold=payload.threshold,
+            threshold=payload.threshold or 1,
+            metric=payload.metric,
+            total_threshold_cents=payload.total_threshold_cents,
             card_scope=payload.card_scope,
             window_type=payload.window.type,
             rolling_days=(
@@ -160,8 +166,16 @@ class LimitationService:
 
         if payload.keyword is not None:
             rule.keyword, rule.normalized_keyword = _normalize_keyword(payload.keyword)
+        if payload.metric is not None:
+            rule.metric = payload.metric
+            if payload.metric == "count":
+                rule.total_threshold_cents = None
+            else:
+                rule.threshold = 1
         if payload.threshold is not None:
             rule.threshold = payload.threshold
+        if payload.total_threshold_cents is not None:
+            rule.total_threshold_cents = payload.total_threshold_cents
         if payload.card_scope is not None:
             rule.card_scope = payload.card_scope
         if payload.window is not None:
@@ -263,7 +277,7 @@ class LimitationService:
                 )
             )
 
-        counts: dict[tuple[str, str], tuple[int, int]] = {}
+        counts: dict[tuple[str, str], tuple[int, int, int, int]] = {}
         effective_date = func.coalesce(
             Transaction.posted_date,
             Transaction.authorized_date,
@@ -280,16 +294,25 @@ class LimitationService:
                     Transaction.pending,
                     Transaction.search_text,
                     effective_date,
+                    Transaction.amount_cents,
+                    Transaction.currency_code,
                 )
                 .where(Transaction.card_account_id.in_(target_ids))
                 .where(_batched_match_filter(normalized_queries))
             )
             rows = (await self._session.execute(statement)).all()
             matching_rules_cache: dict[
-                tuple[str, str, date | None], list[PreparedRule]
+                tuple[str, str, date | None, str], list[PreparedRule]
             ] = {}
-            for card_id, is_pending, search_text, transaction_date in rows:
-                cache_key = (card_id, search_text, transaction_date)
+            for (
+                card_id,
+                is_pending,
+                search_text,
+                transaction_date,
+                amount_cents,
+                currency_code,
+            ) in rows:
+                cache_key = (card_id, search_text, transaction_date, currency_code)
                 matching_rules = matching_rules_cache.get(cache_key)
                 if matching_rules is None:
                     matching_rules = [
@@ -297,6 +320,10 @@ class LimitationService:
                         for prepared in prepared_rules
                         if card_id in prepared.target_ids
                         and prepared.normalized.normalized in search_text
+                        and (
+                            prepared.rule.metric != "net_total_usd"
+                            or currency_code == "USD"
+                        )
                         and (
                             prepared.start_date is None
                             or prepared.end_date is None
@@ -311,29 +338,59 @@ class LimitationService:
                     matching_rules_cache[cache_key] = matching_rules
                 for prepared in matching_rules:
                     count_key = (prepared.rule.id, card_id)
-                    match_count, pending_count = counts.get(count_key, (0, 0))
+                    (
+                        match_count,
+                        pending_count,
+                        match_total_cents,
+                        pending_total_cents,
+                    ) = counts.get(count_key, (0, 0, 0, 0))
                     counts[count_key] = (
                         match_count + 1,
                         pending_count + 1 if is_pending else pending_count,
+                        match_total_cents + amount_cents,
+                        pending_total_cents + amount_cents
+                        if is_pending
+                        else pending_total_cents,
                     )
 
         alerts: list[ActiveTransactionLimitAlert] = []
         for prepared in prepared_rules:
             for card_id in prepared.target_ids:
-                match_count, pending_count = counts.get(
+                (
+                    match_count,
+                    pending_count,
+                    match_total_cents,
+                    pending_total_cents,
+                ) = counts.get(
                     (prepared.rule.id, card_id),
-                    (0, 0),
+                    (0, 0, 0, 0),
                 )
-                if match_count < prepared.rule.threshold:
+                is_total_rule = prepared.rule.metric == "net_total_usd"
+                if is_total_rule:
+                    assert prepared.rule.total_threshold_cents is not None
+                    is_active = match_total_cents >= prepared.rule.total_threshold_cents
+                else:
+                    is_active = match_count >= prepared.rule.threshold
+                if not is_active:
                     continue
                 alerts.append(
                     ActiveTransactionLimitAlert(
                         rule_id=prepared.rule.id,
                         keyword=prepared.rule.keyword,
-                        threshold=prepared.rule.threshold,
+                        metric=prepared.rule.metric,
+                        threshold=(prepared.rule.threshold if not is_total_rule else None),
+                        total_threshold_cents=(
+                            prepared.rule.total_threshold_cents
+                            if is_total_rule
+                            else None
+                        ),
                         card=cards_by_id[card_id],
                         match_count=match_count,
                         pending_count=pending_count,
+                        match_total_cents=(match_total_cents if is_total_rule else None),
+                        pending_total_cents=(
+                            pending_total_cents if is_total_rule else None
+                        ),
                         window=prepared.window,
                     )
                 )

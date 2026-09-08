@@ -70,7 +70,11 @@ def _rule_response(result: RuleResult) -> TransactionLimitationResponse:
     return TransactionLimitationResponse(
         id=rule.id,
         keyword=rule.keyword,
-        threshold=rule.threshold,
+        metric=rule.metric,  # type: ignore[arg-type]
+        threshold=rule.threshold if rule.metric == "count" else None,
+        total_threshold_cents=(
+            rule.total_threshold_cents if rule.metric == "net_total_usd" else None
+        ),
         card_scope=rule.card_scope,  # type: ignore[arg-type]
         card_ids=result.card_ids,
         window=window,
@@ -115,10 +119,14 @@ def _alert_response(
     return TransactionLimitAlertResponse(
         rule_id=alert.rule_id,
         keyword=alert.keyword,
+        metric=alert.metric,  # type: ignore[arg-type]
         threshold=alert.threshold,
+        total_threshold_cents=alert.total_threshold_cents,
         card=_card_response(alert.card),
         match_count=alert.match_count,
         pending_count=alert.pending_count,
+        match_total_cents=alert.match_total_cents,
+        pending_total_cents=alert.pending_total_cents,
         window=window,
     )
 
