@@ -213,9 +213,18 @@ async def test_owner_action_refresh_error_finishes_reconnect_required(
     connected_connection,
     drained_initial_job,
     fake_plaid,
+    monkeypatch,
 ) -> None:
+    from app.services import transaction_refresh_service
     from app.services.plaid_gateway import PlaidGatewayError
     from app.services.transaction_refresh_service import TransactionRefreshService
+
+    events: list[tuple[str, dict[str, object]]] = []
+
+    def capture_event(event: str, *, extra: dict[str, object]) -> None:
+        events.append((event, extra))
+
+    monkeypatch.setattr(transaction_refresh_service.logger, "info", capture_event)
 
     fake_plaid.refresh_error = PlaidGatewayError(
         "ITEM_LOGIN_REQUIRED", "owner_action"
@@ -239,6 +248,21 @@ async def test_owner_action_refresh_error_finishes_reconnect_required(
     assert target.error_code == "ITEM_LOGIN_REQUIRED"
     assert run.state == "failed"
     assert fake_plaid.sync_call_count(connected_connection.access_token) == 0
+    terminal = next(
+        extra
+        for event, extra in events
+        if event == "transaction_refresh_target_completed"
+    )
+    assert terminal == {
+        "refresh_id": run.id,
+        "target_id": target.id,
+        "state": "reconnect_required",
+        "refresh_outcome": "failed",
+        "error_code": "ITEM_LOGIN_REQUIRED",
+        "added": 0,
+        "modified": 0,
+        "removed": 0,
+    }
 
 
 async def test_disconnect_before_reservation_prevents_provider_io(

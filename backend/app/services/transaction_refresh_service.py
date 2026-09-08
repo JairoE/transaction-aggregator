@@ -38,6 +38,22 @@ ACCEPTABLE_TARGET_STATES = (
 logger = logging.getLogger(__name__)
 
 
+def _log_target_completed(target: TransactionRefreshTarget) -> None:
+    logger.info(
+        "transaction_refresh_target_completed",
+        extra={
+            "refresh_id": target.refresh_id,
+            "target_id": target.id,
+            "state": target.state,
+            "refresh_outcome": target.refresh_outcome,
+            "error_code": target.error_code,
+            "added": target.added_count,
+            "modified": target.modified_count,
+            "removed": target.removed_count,
+        },
+    )
+
+
 @dataclass(frozen=True)
 class RefreshPreparation:
     target_id: str
@@ -248,6 +264,7 @@ class TransactionRefreshService:
             target.refresh_outcome = "failed"
             target.error_code = "CONNECTION_DISCONNECTED"
             target.finished_at = utcnow()
+            _log_target_completed(target)
             await self.derive_run(target.refresh_id)
             return RefreshPreparation(target.id, None, should_sync=False)
 
@@ -279,6 +296,7 @@ class TransactionRefreshService:
             target.refresh_outcome = "failed"
             target.error_code = error.code
             target.finished_at = now
+            _log_target_completed(target)
             await self.derive_run(target.refresh_id)
             return RefreshPreparation(target.id, None, should_sync=False)
 
@@ -322,6 +340,7 @@ class TransactionRefreshService:
         }:
             target.state = "reconnect_required"
             target.finished_at = utcnow()
+            _log_target_completed(target)
             await self.derive_run(target.refresh_id)
         else:
             target.state = "syncing"
@@ -396,17 +415,7 @@ class TransactionRefreshService:
             "failed": "failed",
         }.get(target.refresh_outcome, "updated" if changed else "no_changes")
         target.finished_at = utcnow()
-        logger.info(
-            "transaction_refresh_target_completed",
-            extra={
-                "refresh_id": target.refresh_id,
-                "target_id": target.id,
-                "state": target.state,
-                "added": target.added_count,
-                "modified": target.modified_count,
-                "removed": target.removed_count,
-            },
-        )
+        _log_target_completed(target)
         await self.derive_run(target.refresh_id)
 
     async def mark_target_failed(
@@ -425,6 +434,7 @@ class TransactionRefreshService:
         target.state = "reconnect_required" if reconnect else "failed"
         target.error_code = error_code
         target.finished_at = utcnow()
+        _log_target_completed(target)
         await self.derive_run(target.refresh_id)
 
     async def derive_run(self, refresh_id: str) -> None:
