@@ -24,6 +24,9 @@ data/
 # OS
 .DS_Store
 
+# Local git worktrees
+.worktrees/
+
 # Playwright
 frontend/test-results/
 frontend/playwright-report/
