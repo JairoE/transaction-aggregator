@@ -33,6 +33,15 @@ The following constraints are copied verbatim from the PRD:
 7. Frontend polling uses approximately 1, 2, 5, then 10-second intervals with ±20% jitter and stops foreground polling after 90 seconds. Focus/online recovery may resume it.
 8. Refresh run retention is seven days. Cleanup runs at most once per day in batches of 100 rows and never touches active rows.
 9. The production action remains feature-flagged until the owner confirms Plaid Transactions Refresh access and separate billing.
+10. The freshness helper reads `last_transaction_sync_attempt_at` from the existing connections summary. The server computes the maximum `SyncRun.started_at` across the owner's active connections, so scheduled, webhook, initial, legacy manual, and aggregate refresh syncs share one source of truth and failed attempts are included. The existing 60-second connections poll and terminal refresh invalidation keep the label current without adding another request loop.
+
+### Version 1.1 amendment: latest attempted sync
+
+- Extend `ConnectionsResponse` additively with nullable `last_transaction_sync_attempt_at` and regenerate the TypeScript contract.
+- Prove the query is owner-scoped, excludes inactive connections, and selects a failed attempt when it is newest.
+- Replace transaction-date-derived helper copy with **Last checked: {relative time}** and the **Not checked yet** fallback.
+- Render a semantic `time` element whose `dateTime`, hover title, and accessible name preserve the exact localized timestamp.
+- Cover minute/hour/day/week formatting, dashboard integration, and the end-to-end connected-bank flow.
 
 ## File Structure
 
