@@ -229,6 +229,7 @@ class TransactionLimitation(TimestampMixin, Base):
         CheckConstraint(
             "(metric = 'count' AND total_threshold_cents IS NULL) OR "
             "(metric = 'net_total_usd' "
+            "AND total_threshold_cents IS NOT NULL "
             "AND total_threshold_cents BETWEEN 1 AND 2147483647)",
             name="ck_limitation_metric_threshold",
         ),

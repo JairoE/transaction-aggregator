@@ -162,6 +162,28 @@ async def test_net_total_alerts_include_pending_amounts_and_offset_refunds(
     assert alert.total_threshold_cents == 1500
 
 
+async def test_corrupt_net_total_rule_is_ignored_during_evaluation(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    await _seed_cards(db_session, owner)
+    service = LimitationService(db_session)
+    created = await service.create_rule(
+        owner.id,
+        _all_time_request(
+            metric="net_total_usd",
+            threshold=None,
+            total_threshold_cents=1500,
+        ),
+    )
+    created.rule.total_threshold_cents = None
+
+    with db_session.no_autoflush:
+        result = await service.evaluate_active_alerts(owner.id)
+
+    assert result.alerts == []
+
+
 async def test_multiple_overlapping_and_short_keywords_are_counted_independently(
     db_session,
     owner,

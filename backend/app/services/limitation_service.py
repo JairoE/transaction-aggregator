@@ -124,7 +124,7 @@ class LimitationService:
             owner_id=owner_id,
             keyword=keyword,
             normalized_keyword=normalized_keyword,
-            threshold=payload.threshold or 1,
+            threshold=(payload.threshold if payload.threshold is not None else 1),
             metric=payload.metric,
             total_threshold_cents=payload.total_threshold_cents,
             card_scope=payload.card_scope,
@@ -164,7 +164,7 @@ class LimitationService:
         if payload.card_scope is not None or payload.card_ids is not None:
             await self._validate_cards(owner_id, card_scope, card_ids)
 
-        metric = payload.metric or rule.metric
+        metric = payload.metric if payload.metric is not None else rule.metric
         if payload.threshold is not None and metric != "count":
             raise AppError(
                 "REQUEST_INVALID",
@@ -185,13 +185,13 @@ class LimitationService:
             rule.keyword, rule.normalized_keyword = _normalize_keyword(payload.keyword)
         rule.metric = metric
         if metric == "count":
-            rule.threshold = payload.threshold or rule.threshold
+            if payload.threshold is not None:
+                rule.threshold = payload.threshold
             rule.total_threshold_cents = None
         else:
             rule.threshold = 1
-            rule.total_threshold_cents = (
-                payload.total_threshold_cents or rule.total_threshold_cents
-            )
+            if payload.total_threshold_cents is not None:
+                rule.total_threshold_cents = payload.total_threshold_cents
         if payload.card_scope is not None:
             rule.card_scope = payload.card_scope
         if payload.window is not None:
@@ -245,6 +245,11 @@ class LimitationService:
 
         prepared_rules: list[PreparedRule] = []
         for rule in rules:
+            if (
+                rule.metric == "net_total_usd"
+                and rule.total_threshold_cents is None
+            ):
+                continue
             target_ids = (
                 active_card_ids
                 if rule.card_scope == "all_cards"
@@ -383,7 +388,6 @@ class LimitationService:
                 )
                 is_total_rule = prepared.rule.metric == "net_total_usd"
                 if is_total_rule:
-                    assert prepared.rule.total_threshold_cents is not None
                     is_active = match_total_cents >= prepared.rule.total_threshold_cents
                 else:
                     is_active = match_count >= prepared.rule.threshold

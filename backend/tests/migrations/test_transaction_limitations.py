@@ -74,6 +74,38 @@ def test_all_time_limitation_schema_enforces_window_and_threshold(
         connection.close()
 
 
+def test_net_total_schema_requires_cents_threshold(
+    migrated_sqlite_path: str,
+    seeded_card: dict[str, str],
+) -> None:
+    connection = sqlite3.connect(migrated_sqlite_path)
+    try:
+        with pytest.raises(sqlite3.IntegrityError):
+            connection.execute(
+                "INSERT INTO transaction_limitations "
+                "(id, owner_id, keyword, normalized_keyword, threshold, metric, "
+                "total_threshold_cents, card_scope, window_type, is_enabled, "
+                "created_at, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    "missing-net-total-threshold",
+                    "owner-1",
+                    "Paze",
+                    "paze",
+                    1,
+                    "net_total_usd",
+                    None,
+                    "all_cards",
+                    "all_time",
+                    1,
+                    NOW,
+                    NOW,
+                ),
+            )
+    finally:
+        connection.close()
+
+
 def test_rule_card_associations_are_unique_and_cascade(
     migrated_sqlite_path: str,
     seeded_card: dict[str, str],
