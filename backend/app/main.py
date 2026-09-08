@@ -85,6 +85,7 @@ def create_app(
                 )
                 await session.commit()
             tasks.append(asyncio.create_task(worker.run_forever()))
+            tasks.append(asyncio.create_task(worker.run_lease_recovery()))
             tasks.append(asyncio.create_task(worker.run_refresh_cleanup()))
             tasks.append(
                 asyncio.create_task(

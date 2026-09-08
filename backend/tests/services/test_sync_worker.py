@@ -276,6 +276,53 @@ async def test_expired_job_is_recovered_and_completed(
     assert job.lease_token is None
 
 
+async def test_live_worker_periodically_recovers_an_expired_job(
+    database,
+    db_session,
+    connected_connection,
+    drained_initial_job,
+    fake_plaid,
+    token_cipher,
+) -> None:
+    from app.services.sync_service import enqueue_sync
+    from app.services.sync_worker import SyncWorker
+
+    queued = await enqueue_sync(db_session, connected_connection.id, "manual")
+    job_id = queued.job.id
+    await db_session.commit()
+    first_worker = SyncWorker(database, fake_plaid, token_cipher)
+    claim = await first_worker._claim_next_job()
+    assert claim is not None
+    await db_session.execute(
+        update(SyncJob)
+        .where(SyncJob.id == claim.job_id)
+        .values(lease_expires_at=utcnow() - timedelta(seconds=1))
+    )
+    await db_session.commit()
+
+    recovery_worker = SyncWorker(
+        database,
+        fake_plaid,
+        token_cipher,
+        lease_seconds=0.4,
+        heartbeat_seconds=0.05,
+    )
+    running = asyncio.create_task(recovery_worker.run_lease_recovery())
+    try:
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+            await db_session.rollback()
+            job = await db_session.get(SyncJob, job_id)
+            await db_session.refresh(job)
+            if job.state == "queued":
+                break
+        assert job.state == "queued"
+        assert job.lease_token is None
+    finally:
+        recovery_worker.stop()
+        await running
+
+
 async def test_stale_fence_cannot_apply_or_complete_job(
     database,
     db_session,

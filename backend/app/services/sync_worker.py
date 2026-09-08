@@ -76,6 +76,9 @@ class SyncWorker:
             if heartbeat_seconds is not None
             else settings.sync_heartbeat_seconds
         )
+        self._recovery_seconds = min(
+            self._heartbeat_seconds, self._lease_seconds / 2
+        )
         self._provider_timeout_seconds = float(
             provider_timeout_seconds
             if provider_timeout_seconds is not None
@@ -468,6 +471,22 @@ class SyncWorker:
                     )
                 except TimeoutError:
                     continue
+
+    async def run_lease_recovery(self) -> None:
+        """Continuously return expired work to the queue without a restart."""
+
+        while not self._stopped.is_set():
+            try:
+                await asyncio.wait_for(
+                    self._stopped.wait(), timeout=self._recovery_seconds
+                )
+                return
+            except TimeoutError:
+                pass
+            try:
+                await self.recover_expired()
+            except Exception:  # pragma: no cover - loop must survive
+                logger.exception("sync_lease_recovery_error")
 
     async def run_scheduler(self, interval_minutes: int) -> None:
         while not self._stopped.is_set():
