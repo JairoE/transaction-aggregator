@@ -68,6 +68,36 @@ export function formatSyncStatus(cacheAsOf: string | null, now: Date = new Date(
   return `Synced ${diffDays}d ago`
 }
 
+/** Human-readable elapsed time for the dashboard's latest sync attempt. */
+export function formatRelativeTimestamp(
+  isoTimestamp: string,
+  now: Date = new Date(),
+): string {
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((now.getTime() - new Date(isoTimestamp).getTime()) / 1_000),
+  )
+  if (elapsedSeconds < 60) return 'just now'
+
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60)
+  const relativeTime = new Intl.RelativeTimeFormat(locale(), { numeric: 'always' })
+  if (elapsedMinutes < 60) return relativeTime.format(-elapsedMinutes, 'minute')
+
+  const elapsedHours = Math.floor(elapsedMinutes / 60)
+  if (elapsedHours < 24) return relativeTime.format(-elapsedHours, 'hour')
+
+  const elapsedDays = Math.floor(elapsedHours / 24)
+  if (elapsedDays < 7) return relativeTime.format(-elapsedDays, 'day')
+
+  const elapsedWeeks = Math.floor(elapsedDays / 7)
+  if (elapsedDays < 30) return relativeTime.format(-elapsedWeeks, 'week')
+
+  const elapsedMonths = Math.floor(elapsedDays / 30)
+  if (elapsedDays < 365) return relativeTime.format(-elapsedMonths, 'month')
+
+  return relativeTime.format(-Math.floor(elapsedDays / 365), 'year')
+}
+
 /**
  * An exact, locale-formatted moment — "Aug 19, 2026, 10:00 AM" — for the
  * places a relative label like `formatSyncStatus`'s "58m ago" would be too

@@ -64,19 +64,22 @@ async def receive_plaid_webhook(
     webhook_code = payload.get("webhook_code")
     item_id = payload.get("item_id")
 
-    receipt = WebhookReceipt(
-        payload_sha256=digest,
-        webhook_type=webhook_type,
-        webhook_code=webhook_code,
-        plaid_item_id=item_id,
-    )
-    session.add(receipt)
     try:
-        await session.flush()
+        async with session.begin_nested():
+            session.add(
+                WebhookReceipt(
+                    payload_sha256=digest,
+                    webhook_type=webhook_type,
+                    webhook_code=webhook_code,
+                    plaid_item_id=item_id,
+                )
+            )
+            await session.flush()
     except IntegrityError:
-        await session.rollback()
-        # A replayed webhook must not create a second job.
-        return Response(status_code=204)
+        # Keep one audit receipt, but still advance the requested generation:
+        # a replay can represent another provider notification with the same
+        # payload and must not be mistaken for work already completed.
+        pass
 
     if not item_id:
         return Response(status_code=204)

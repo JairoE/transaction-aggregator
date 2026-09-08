@@ -54,6 +54,7 @@ export function makeConnectionsResponse(
     production_item_count: 0,
     production_item_limit: 10,
     environment: 'demo',
+    transaction_refresh_enabled: true,
     uses_demo_bank: true,
     ...extra,
   }
@@ -75,6 +76,7 @@ export const handlers = [
     HttpResponse.json({ code: 'AUTH_REQUIRED', message: 'Sign in to continue.' }, { status: 401 }),
   ),
   http.get('/api/connections', () => HttpResponse.json(makeConnectionsResponse())),
+  http.get('/api/transaction-refreshes/active', () => new HttpResponse(null, { status: 204 })),
   http.get('/api/transaction-limit-alerts', () => HttpResponse.json({
     alerts: [],
     evaluated_at: '2026-08-22T12:00:00Z',

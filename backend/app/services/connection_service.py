@@ -21,6 +21,7 @@ from app.models import (
     CardAccount,
     Owner,
     SyncJob,
+    SyncRun,
     Transaction,
     new_id,
     utcnow,
@@ -76,6 +77,7 @@ class ConnectionsSummary:
     production_item_count: int
     production_item_limit: int
     environment: str
+    last_transaction_sync_attempt_at: datetime | None
 
 
 class ConnectionService:
@@ -110,6 +112,18 @@ class ConnectionService:
             )
         ).scalars().all()
         active_by_slug = {row.bank_slug: row for row in rows}
+
+        last_transaction_sync_attempt_at = (
+            await self._session.execute(
+                select(func.max(SyncRun.started_at))
+                .join(
+                    BankConnection,
+                    SyncRun.connection_id == BankConnection.id,
+                )
+                .where(BankConnection.owner_id == owner.id)
+                .where(BankConnection.lifecycle_status == "active")
+            )
+        ).scalar_one_or_none()
 
         active_job_connection_ids = set(
             (
@@ -183,6 +197,7 @@ class ConnectionService:
             production_item_count=await self._production_item_count(owner.id),
             production_item_limit=TRIAL_ITEM_LIMIT,
             environment=self._settings.environment,
+            last_transaction_sync_attempt_at=last_transaction_sync_attempt_at,
         )
 
     # --- link tokens ------------------------------------------------------

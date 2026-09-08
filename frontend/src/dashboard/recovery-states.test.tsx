@@ -57,6 +57,33 @@ describe('connection recovery states', () => {
     })
   })
 
+  it('disables transaction refresh offline while preserving cached rows', async () => {
+    server.use(
+      authenticatedSessionHandler(),
+      connectionsHandler(
+        makeConnectionsResponse([
+          {
+            bank: 'capital-one',
+            connected: true,
+            connection_id: 'conn-capital-one',
+            lifecycle_status: 'active',
+            card_count: 2,
+          },
+        ]),
+      ),
+      searchHandler(() => recentSearchResponse()),
+    )
+    await renderDashboard()
+
+    act(() => setNetworkOnline(false))
+
+    expect(screen.getByRole('button', { name: /check for new transactions/i })).toBeDisabled()
+    expect(
+      screen.getByText('Connect to the internet to check for new transactions.'),
+    ).toBeInTheDocument()
+    expect(regionFor(DASHBOARD_CARDS[0].mask ?? '')).toBeInTheDocument()
+  })
+
   it('shows needs_reconnect with a Reconnect action that calls update-token, not exchange, for ITEM_LOGIN_REQUIRED', async () => {
     let updateTokenCalls = 0
     let exchangeCalls = 0
@@ -467,7 +494,7 @@ describe('connection recovery states', () => {
   it('never persists the CSRF token or session data to sessionStorage', async () => {
     server.use(authenticatedSessionHandler(), searchHandler(() => recentSearchResponse()))
     await renderDashboard()
-    await screen.findByText(/showing recent cached transactions on every card/i)
+    await screen.findByRole('region', { name: /ending in 4812/i })
 
     await waitFor(() => expect(window.sessionStorage.length).toBeGreaterThan(0))
 

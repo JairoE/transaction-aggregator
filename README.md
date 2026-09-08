@@ -14,6 +14,14 @@ to the fleet summary without changing the submitted query. See the
 [All Transactions View PRD](docs/features/all-transactions-view/PRD.md) for the
 full behavior and API contract.
 
+The dashboard’s **Check for new transactions** action creates one durable run
+across every active bank connection. It returns immediately, reports progress,
+and keeps the existing cached rows usable while a background worker requests
+eligible provider updates and reconciles the local cursor. It does not promise
+bank-real-time data. Production use is opt-in after confirming Plaid access and
+billing; see the [Refresh Transactions Button PRD](docs/features/refresh-transactions/PRD.md)
+for the recovery, cooldown, and scale contract.
+
 Transaction limitations add informational count alerts—never transaction
 blocking—evaluated entirely from the local cache. Rules can target every card
 or selected cards, count pending transactions, and use all available history,

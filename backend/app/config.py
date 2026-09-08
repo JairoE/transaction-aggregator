@@ -37,6 +37,10 @@ class Settings(BaseSettings):
     sync_interval_minutes: int = 60
     display_stale_after_minutes: int | None = None
     enable_background_worker: bool = True
+    enable_transaction_refresh: bool | None = None
+    sync_lease_seconds: int = Field(default=60, ge=5, le=300)
+    sync_heartbeat_seconds: int = Field(default=15, ge=1, le=120)
+    provider_timeout_seconds: int = Field(default=40, ge=1, le=240)
 
     @model_validator(mode="after")
     def _validate(self) -> Settings:
@@ -44,6 +48,15 @@ class Settings(BaseSettings):
             raise ValueError("application_secret must be at least 32 characters")
         if self.token_encryption_key_version < 1:
             raise ValueError("token_encryption_key_version must be >= 1")
+        if self.sync_heartbeat_seconds >= self.sync_lease_seconds:
+            raise ValueError("sync heartbeat must be shorter than the lease")
+        if (
+            self.provider_timeout_seconds + self.sync_heartbeat_seconds
+            >= self.sync_lease_seconds
+        ):
+            raise ValueError(
+                "provider timeout plus heartbeat must be shorter than the lease"
+            )
         if self.environment == "production":
             url = str(self.public_base_url)
             if not url.startswith("https://"):
@@ -68,6 +81,12 @@ class Settings(BaseSettings):
         if self.display_stale_after_minutes is not None:
             return self.display_stale_after_minutes
         return self.sync_interval_minutes * 2 + 30
+
+    @property
+    def transaction_refresh_enabled(self) -> bool:
+        if self.enable_transaction_refresh is not None:
+            return self.enable_transaction_refresh
+        return self.environment in {"test", "demo"}
 
     @property
     def oauth_redirect_uri(self) -> str:

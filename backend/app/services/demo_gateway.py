@@ -252,6 +252,7 @@ class DemoPlaidGateway:
 
     def __init__(self) -> None:
         self.link_token_requests: list[LinkTokenRequest] = []
+        self._refresh_count = 0
 
     @staticmethod
     def bank_for_token(token: str) -> DemoBank:
@@ -338,11 +339,13 @@ class DemoPlaidGateway:
             request_id=f"demo-request-{bank.slug}-{offset}",
         )
 
-    def transactions_refresh(self, access_token: str) -> None:
+    def transactions_refresh(self, access_token: str) -> str | None:
         bank = self.bank_for_token(access_token)
         if bank.slug == "capital-one":
             # Capital One credit-only Items do not support /transactions/refresh.
             raise RefreshUnsupported()
+        self._refresh_count += 1
+        return f"demo-refresh-{self._refresh_count}"
 
     def remove_item(self, access_token: str) -> None:
         return None

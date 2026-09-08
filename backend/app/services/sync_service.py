@@ -7,13 +7,15 @@ failure therefore leaves the previous cache and cursor untouched.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import unicodedata
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.errors import AppError
@@ -30,7 +32,6 @@ from app.services.plaid_gateway import (
     PlaidGateway,
     PlaidGatewayError,
     PlaidTransaction,
-    RefreshUnsupported,
     SyncMutationDuringPagination,
     SyncPage,
 )
@@ -39,7 +40,6 @@ logger = logging.getLogger(__name__)
 
 ACTIVE_JOB_STATES = ("queued", "running")
 MAX_PAGES_PER_ATTEMPT = 200
-REFRESH_COOLDOWN_MINUTES = 15
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,18 @@ class SyncSummary:
     removed: int
     starting_cursor: str
     ending_cursor: str
+
+
+@dataclass(frozen=True)
+class EnqueuedSync:
+    """The coalesced job and the generation assigned to this request."""
+
+    job: SyncJob
+    requested_generation: int
+
+
+class LeaseLostError(Exception):
+    """A worker no longer owns the job whose results it collected."""
 
 
 async def active_job_for(
@@ -67,23 +79,54 @@ async def active_job_for(
 
 async def enqueue_sync(
     session: AsyncSession, connection_id: str, trigger: str
-) -> SyncJob:
-    """Queue a sync for one connection, or return the job already in flight."""
+) -> EnqueuedSync:
+    """Advance the connection generation and coalesce work into one active job."""
+
+    requested_generation = (
+        await session.execute(
+            update(BankConnection)
+            .where(BankConnection.id == connection_id)
+            .where(BankConnection.lifecycle_status == "active")
+            .values(
+                sync_requested_generation=BankConnection.sync_requested_generation + 1
+            )
+            .returning(BankConnection.sync_requested_generation)
+        )
+    ).scalar_one_or_none()
+    if requested_generation is None:
+        raise AppError(
+            "CONNECTION_NOT_ACTIVE", "That connection is not active.", 409
+        )
 
     existing = await active_job_for(session, connection_id)
     if existing is not None:
-        return existing
+        existing.target_generation = requested_generation
+        await session.flush()
+        return EnqueuedSync(existing, requested_generation)
 
     job = SyncJob(
         connection_id=connection_id,
         trigger=trigger,
         state="queued",
         attempts=0,
+        target_generation=requested_generation,
         run_after=utcnow(),
     )
-    session.add(job)
-    await session.flush()
-    return job
+    try:
+        async with session.begin_nested():
+            session.add(job)
+            await session.flush()
+    except IntegrityError:
+        # A database without SQLite's single-writer serialization can race
+        # between the active-job read and insert. The unique partial index is
+        # the final arbiter; fold the request into the winner.
+        existing = await active_job_for(session, connection_id)
+        if existing is None:
+            raise
+        existing.target_generation = requested_generation
+        await session.flush()
+        return EnqueuedSync(existing, requested_generation)
+    return EnqueuedSync(job, requested_generation)
 
 
 async def enqueue_stale_connections(
@@ -103,38 +146,9 @@ async def enqueue_stale_connections(
         last = connection.last_successful_sync_at
         if last is not None and last > threshold:
             continue
-        if await active_job_for(session, connection.id) is not None:
-            # A queued or running job already covers this connection.
-            continue
         await enqueue_sync(session, connection.id, trigger)
         queued += 1
     return queued
-
-
-async def request_refresh(
-    session: AsyncSession,
-    connection: BankConnection,
-    gateway: PlaidGateway,
-    cipher: TokenCipher,
-) -> bool:
-    """Best-effort provider refresh; disables itself when unsupported."""
-
-    if not connection.refresh_supported:
-        return False
-    last = connection.last_refresh_at
-    if last is not None and utcnow() - last < timedelta(minutes=REFRESH_COOLDOWN_MINUTES):
-        return False
-
-    access_token = decrypt_access_token(connection, cipher)
-    try:
-        gateway.transactions_refresh(access_token)
-    except RefreshUnsupported:
-        connection.refresh_supported = False
-        return False
-    except PlaidGatewayError:
-        return False
-    connection.last_refresh_at = utcnow()
-    return True
 
 
 def decrypt_access_token(connection: BankConnection, cipher: TokenCipher) -> str:
@@ -178,13 +192,20 @@ class SyncService:
         session: AsyncSession,
         gateway: PlaidGateway,
         cipher: TokenCipher,
+        provider_timeout_seconds: float = 40,
     ) -> None:
         self._session = session
         self._gateway = gateway
         self._cipher = cipher
+        self._provider_timeout_seconds = provider_timeout_seconds
 
     async def synchronize(
-        self, connection_id: str, job_id: str | None = None
+        self,
+        connection_id: str,
+        job_id: str | None = None,
+        *,
+        lease_token: str | None = None,
+        completed_generation: int = 0,
     ) -> SyncSummary:
         connection = await self._session.get(BankConnection, connection_id)
         if connection is None or connection.lifecycle_status != "active":
@@ -194,13 +215,44 @@ class SyncService:
         attempt_cursor = connection.sync_cursor or ""
         started_at = utcnow()
 
+        # Do not hold a database snapshot or writer lock across network I/O.
+        # The fencing token is rechecked in the fresh apply transaction.
+        if lease_token is not None:
+            if job_id is None:
+                raise ValueError("job_id is required with a lease token")
+            await self._session.rollback()
+
         try:
-            pages, ending_cursor, request_id = self._collect_pages(
+            pages, ending_cursor, request_id = await self._collect_pages(
                 access_token, attempt_cursor
             )
         except PlaidGatewayError as error:
-            await self._record_failure(connection, job_id, attempt_cursor, started_at, error)
+            if lease_token is None:
+                await self._record_failure(
+                    connection, job_id, attempt_cursor, started_at, error
+                )
             raise
+
+        if lease_token is not None:
+            fenced = await self._session.execute(
+                update(SyncJob)
+                .where(SyncJob.id == job_id)
+                .where(SyncJob.state == "running")
+                .where(SyncJob.lease_token == lease_token)
+                .where(SyncJob.lease_expires_at > utcnow())
+                .values(updated_at=utcnow())
+            )
+            if not fenced.rowcount:
+                await self._session.rollback()
+                raise LeaseLostError(job_id)
+            connection = await self._session.get(BankConnection, connection_id)
+            if (
+                connection is None
+                or connection.lifecycle_status != "active"
+                or (connection.sync_cursor or "") != attempt_cursor
+            ):
+                await self._session.rollback()
+                raise LeaseLostError(job_id)
 
         summary = await self._apply(connection, pages, attempt_cursor, ending_cursor)
 
@@ -208,6 +260,8 @@ class SyncService:
         connection.last_successful_sync_at = utcnow()
         connection.last_error_code = None
         connection.last_error_at = None
+        if completed_generation:
+            connection.sync_completed_generation = completed_generation
         await self._record_run(
             connection,
             job_id,
@@ -218,12 +272,13 @@ class SyncService:
             "succeeded",
             None,
             request_id,
+            completed_generation,
         )
         await self._session.flush()
         return summary
 
     # --- page loop --------------------------------------------------------
-    def _collect_pages(
+    async def _collect_pages(
         self, access_token: str, attempt_cursor: str
     ) -> tuple[list[SyncPage], str, str | None]:
         request_cursor = attempt_cursor
@@ -236,13 +291,20 @@ class SyncService:
             if guard > MAX_PAGES_PER_ATTEMPT:
                 raise PlaidGatewayError("TRANSACTIONS_SYNC_LIMIT", "transient")
             try:
-                page = self._gateway.transactions_sync(access_token, request_cursor)
+                page = await asyncio.wait_for(
+                    asyncio.to_thread(
+                        self._gateway.transactions_sync, access_token, request_cursor
+                    ),
+                    timeout=self._provider_timeout_seconds,
+                )
             except SyncMutationDuringPagination:
                 # Plaid mutated the Item mid-pagination; discard partial work and
                 # restart from the cursor this attempt began with.
                 request_cursor = attempt_cursor
                 pages.clear()
                 continue
+            except TimeoutError as error:
+                raise PlaidGatewayError("PROVIDER_TIMEOUT", "transient") from error
             pages.append(page)
             request_id = page.request_id or request_id
             request_cursor = page.next_cursor
@@ -362,6 +424,7 @@ class SyncService:
         outcome: str,
         error_code: str | None,
         request_id: str | None,
+        completed_generation: int = 0,
     ) -> None:
         self._session.add(
             SyncRun(
@@ -375,6 +438,7 @@ class SyncService:
                 outcome=outcome,
                 error_code=error_code,
                 plaid_request_id=request_id,
+                completed_generation=completed_generation,
                 started_at=started_at,
                 finished_at=utcnow(),
             )
@@ -400,6 +464,7 @@ class SyncService:
             "failed",
             error.error_code,
             error.request_id,
+            0,
         )
         await self._session.flush()
         logger.warning(
@@ -414,14 +479,14 @@ class SyncService:
 
 __all__ = [
     "ACTIVE_JOB_STATES",
+    "EnqueuedSync",
+    "LeaseLostError",
     "active_job_for",
-    "REFRESH_COOLDOWN_MINUTES",
     "SyncService",
     "SyncSummary",
     "decrypt_access_token",
     "enqueue_stale_connections",
     "enqueue_sync",
     "normalize_search_text",
-    "request_refresh",
     "to_cents",
 ]

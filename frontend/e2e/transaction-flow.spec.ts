@@ -249,6 +249,18 @@ test('owner connects four banks and searches every card at once', async ({ page 
 
   await page.getByRole('button', { name: 'View cards' }).click()
   await expect(page.getByRole('heading', { name: 'Your credit cards' })).toBeVisible()
+  const lastChecked = page.locator('.transaction-refresh time')
+  await expect(lastChecked).toHaveText(/^Last checked: /)
+  await expect(lastChecked).toHaveAttribute('datetime', /.+/)
+  await expect(lastChecked).toHaveAttribute('title', /.+/)
+  await expect(page.getByText(/Showing recent cached transactions/i)).toHaveCount(0)
+
+  const refresh = page.getByRole('button', { name: 'Check for new transactions' })
+  await refresh.click()
+  await expect(page.getByRole('button', { name: 'Checking…' })).toBeDisabled()
+  await expect(
+    page.getByText(/Transactions are up to date|automatic updates only/i),
+  ).toBeVisible({ timeout: 30_000 })
 
   const panelSurface = await page.locator('.card-panel').first().evaluate((panel) => {
     const styles = getComputedStyle(panel)

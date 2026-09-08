@@ -191,7 +191,7 @@ class PlaidGateway(Protocol):
     def transactions_sync(self, access_token: str, cursor: str) -> SyncPage:
         raise NotImplementedError
 
-    def transactions_refresh(self, access_token: str) -> None:
+    def transactions_refresh(self, access_token: str) -> str | None:
         raise NotImplementedError
 
     def remove_item(self, access_token: str) -> None:

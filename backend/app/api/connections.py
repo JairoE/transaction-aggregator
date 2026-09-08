@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 
-from app.dependencies import CsrfDep, OwnerDep, connection_service_dep
+from app.dependencies import CsrfDep, OwnerDep, SettingsDep, connection_service_dep
 from app.schemas import (
     BankConnectionResponse,
     ConnectionsResponse,
@@ -22,7 +22,9 @@ ServiceDep = Depends(connection_service_dep)
 
 @router.get("", response_model=ConnectionsResponse)
 async def list_connections(
-    owner: OwnerDep, service: ConnectionService = ServiceDep
+    owner: OwnerDep,
+    settings: SettingsDep,
+    service: ConnectionService = ServiceDep,
 ) -> ConnectionsResponse:
     summary = await service.list_connections(owner)
     return ConnectionsResponse(
@@ -51,6 +53,8 @@ async def list_connections(
         production_item_limit=summary.production_item_limit,
         environment=summary.environment,
         uses_demo_bank=summary.environment in {"demo", "test"},
+        transaction_refresh_enabled=settings.transaction_refresh_enabled,
+        last_transaction_sync_attempt_at=summary.last_transaction_sync_attempt_at,
     )
 
 

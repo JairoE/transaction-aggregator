@@ -90,6 +90,7 @@ class FakePlaidGateway:
     webhook_valid: bool = True
     exchange_error: PlaidGatewayError | None = None
     accounts_error: PlaidGatewayError | None = None
+    refresh_error: PlaidGatewayError | None = None
     sync_error: Exception | None = None
     mutation_once_at_call: int | None = None
 
@@ -177,10 +178,13 @@ class FakePlaidGateway:
             has_more=False,
         )
 
-    def transactions_refresh(self, access_token: str) -> None:
+    def transactions_refresh(self, access_token: str) -> str | None:
+        if self.refresh_error is not None:
+            raise self.refresh_error
         if not self.refresh_supported:
             raise RefreshUnsupported()
         self.refreshed_tokens.append(access_token)
+        return f"refresh-request-{len(self.refreshed_tokens)}"
 
     def remove_item(self, access_token: str) -> None:
         self.removed_tokens.append(access_token)

@@ -75,7 +75,7 @@ async def test_manual_sync_on_unknown_connection_is_not_found(
     assert response.status_code == 404
 
 
-async def test_unsupported_refresh_does_not_fail_the_sync_request(
+async def test_legacy_manual_endpoint_is_sync_only(
     authenticated_client: AsyncClient,
     csrf_token: str,
     connected_connection,
@@ -83,8 +83,6 @@ async def test_unsupported_refresh_does_not_fail_the_sync_request(
     fake_plaid,
     db_session,
 ) -> None:
-    from app.models import BankConnection
-
     fake_plaid.refresh_supported = False
 
     response = await authenticated_client.post(
@@ -94,9 +92,7 @@ async def test_unsupported_refresh_does_not_fail_the_sync_request(
 
     assert response.status_code == 202
     assert response.json()["refresh_requested"] is False
-    connection = await db_session.get(BankConnection, connected_connection.id)
-    await db_session.refresh(connection)
-    assert connection.refresh_supported is False
+    assert fake_plaid.refreshed_tokens == []
 
 
 async def test_sync_status_lists_in_flight_jobs(

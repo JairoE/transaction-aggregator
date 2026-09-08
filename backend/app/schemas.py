@@ -78,6 +78,72 @@ class ConnectionsResponse(BaseModel):
     production_item_limit: int
     environment: str
     uses_demo_bank: bool
+    transaction_refresh_enabled: bool
+    last_transaction_sync_attempt_at: datetime | None = None
+
+
+RefreshRunState = Literal["queued", "running", "succeeded", "partial", "failed"]
+RefreshTargetState = Literal[
+    "queued",
+    "refreshing",
+    "syncing",
+    "updated",
+    "no_changes",
+    "automatic_updates_only",
+    "cooldown",
+    "reconnect_required",
+    "outcome_unknown",
+    "failed",
+    "disconnected",
+]
+RefreshAttemptState = Literal[
+    "not_attempted",
+    "reserved",
+    "dispatching",
+    "accepted",
+    "unsupported",
+    "cooldown",
+    "outcome_unknown",
+    "failed",
+]
+
+
+class TransactionRefreshSummaryResponse(BaseModel):
+    total: int
+    completed: int
+    updated: int
+    attention: int
+    added: int
+    modified: int
+    removed: int
+
+
+class TransactionRefreshTargetResponse(BaseModel):
+    connection_id: str
+    bank: BankSlug
+    state: RefreshTargetState
+    refresh_outcome: RefreshAttemptState
+    next_refresh_eligible_at: datetime | None
+    added: int
+    modified: int
+    removed: int
+    error_code: str | None
+
+
+class TransactionRefreshResponse(BaseModel):
+    id: str
+    state: RefreshRunState
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
+    expires_at: datetime
+    summary: TransactionRefreshSummaryResponse
+    targets: list[TransactionRefreshTargetResponse]
+
+
+class CreateTransactionRefreshResponse(BaseModel):
+    coalesced: bool
+    refresh: TransactionRefreshResponse
 
 
 class CardResponse(BaseModel):
@@ -276,6 +342,7 @@ __all__ = [
     "CardResponse",
     "ConnectionsResponse",
     "CreateTransactionLimitationRequest",
+    "CreateTransactionRefreshResponse",
     "CreateLinkTokenRequest",
     "ErrorResponse",
     "ExchangePublicTokenRequest",
@@ -293,5 +360,8 @@ __all__ = [
     "TransactionLimitationResponse",
     "TransactionLimitAlertListResponse",
     "TransactionLimitAlertResponse",
+    "TransactionRefreshResponse",
+    "TransactionRefreshSummaryResponse",
+    "TransactionRefreshTargetResponse",
     "UpdateTransactionLimitationRequest",
 ]

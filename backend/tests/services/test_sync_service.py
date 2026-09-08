@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 
 import pytest
@@ -313,7 +314,8 @@ async def test_exchange_leaves_exactly_one_initial_job(
 
     jobs = (await db_session.execute(select(SyncJob))).scalars().all()
     assert len(jobs) == 1
-    assert queued.trigger == "initial"
+    assert queued.job.trigger == "initial"
+    assert queued.requested_generation == 2
 
 
 async def test_duplicate_enqueue_returns_the_existing_job(
@@ -324,8 +326,50 @@ async def test_duplicate_enqueue_returns_the_existing_job(
     first = await enqueue_sync(db_session, connected_connection.id, "manual")
     second = await enqueue_sync(db_session, connected_connection.id, "webhook")
 
-    assert first.id == second.id
-    assert second.trigger == "manual"
+    assert first.job.id == second.job.id
+    assert second.job.trigger == "manual"
+    assert second.requested_generation == first.requested_generation + 1
+    assert second.job.target_generation == second.requested_generation
+
+
+async def test_concurrent_enqueue_coalesces_and_advances_every_generation(
+    database, db_session, connected_connection, drained_initial_job
+) -> None:
+    from app.models import SyncJob
+    from app.services.sync_service import enqueue_sync
+
+    connection = await db_session.get(BankConnection, connected_connection.id)
+    await db_session.refresh(connection)
+    starting_generation = connection.sync_requested_generation
+    request_count = 100
+
+    async def enqueue(index: int) -> tuple[str, int]:
+        async with database.session() as session:
+            result = await enqueue_sync(
+                session, connected_connection.id, f"test-{index}"
+            )
+            await session.commit()
+            return result.job.id, result.requested_generation
+
+    results = await asyncio.gather(*(enqueue(index) for index in range(request_count)))
+
+    await db_session.rollback()
+    db_session.expire_all()
+    connection = await db_session.get(BankConnection, connected_connection.id)
+    jobs = (
+        await db_session.execute(
+            select(SyncJob)
+            .where(SyncJob.connection_id == connected_connection.id)
+            .where(SyncJob.state.in_(("queued", "running")))
+        )
+    ).scalars().all()
+    assert len({job_id for job_id, _ in results}) == 1
+    assert len(jobs) == 1
+    assert connection.sync_requested_generation == starting_generation + request_count
+    assert jobs[0].target_generation == connection.sync_requested_generation
+    assert {generation for _, generation in results} == set(
+        range(starting_generation + 1, starting_generation + request_count + 1)
+    )
 
 
 async def test_stale_connections_are_enqueued_at_startup(

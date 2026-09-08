@@ -2,20 +2,16 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from pydantic import BaseModel
 from sqlalchemy import select
 
-from app.dependencies import CsrfDep, OwnerDep, SessionDep, connection_service_dep
+from app.dependencies import CsrfDep, OwnerDep, SessionDep
 from app.errors import NotFoundError
 from app.models import BankConnection, SyncJob
-from app.services.connection_service import ConnectionService
-from app.services.sync_service import enqueue_sync, request_refresh
+from app.services.sync_service import enqueue_sync
 
 router = APIRouter(prefix="/api", tags=["sync"])
-
-ServiceDep = Depends(connection_service_dep)
-
 
 class SyncJobResponse(BaseModel):
     job_id: str
@@ -49,7 +45,6 @@ async def trigger_sync(
     connection_id: str,
     owner: OwnerDep,
     session: SessionDep,
-    service: ConnectionService = ServiceDep,
 ) -> SyncJobResponse:
     connection = (
         await session.execute(
@@ -62,16 +57,14 @@ async def trigger_sync(
     if connection is None:
         raise NotFoundError("That bank connection was not found.")
 
-    refreshed = await request_refresh(
-        session, connection, service.gateway, service.cipher
-    )
-    job = await enqueue_sync(session, connection.id, "manual")
+    queued = await enqueue_sync(session, connection.id, "manual")
+    job = queued.job
     return SyncJobResponse(
         job_id=job.id,
         connection_id=connection.id,
         state=job.state,
         trigger=job.trigger,
-        refresh_requested=refreshed,
+        refresh_requested=False,
     )
 
 

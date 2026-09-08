@@ -15,6 +15,7 @@ from app.api import connections as connections_api
 from app.api import limitations as limitations_api
 from app.api import search as search_api
 from app.api import sync as sync_api
+from app.api import transaction_refreshes as transaction_refreshes_api
 from app.api import webhooks as webhooks_api
 from app.config import Settings, get_settings
 from app.db import Database, create_database
@@ -66,10 +67,19 @@ def create_app(
         worker: SyncWorker | None = None
         if resolved_settings.enable_background_worker:
             worker = SyncWorker(
-                app.state.database, app.state.plaid_gateway, app.state.token_cipher
+                app.state.database,
+                app.state.plaid_gateway,
+                app.state.token_cipher,
+                lease_seconds=resolved_settings.sync_lease_seconds,
+                heartbeat_seconds=resolved_settings.sync_heartbeat_seconds,
+                provider_timeout_seconds=resolved_settings.provider_timeout_seconds,
+                transaction_refresh_enabled=(
+                    resolved_settings.transaction_refresh_enabled
+                ),
             )
             app.state.sync_worker = worker
             # Startup recovery: anything not synced within the window is queued.
+            await worker.recover_expired()
             async with app.state.database.session() as session:
                 await enqueue_stale_connections(
                     session,
@@ -78,6 +88,8 @@ def create_app(
                 )
                 await session.commit()
             tasks.append(asyncio.create_task(worker.run_forever()))
+            tasks.append(asyncio.create_task(worker.run_lease_recovery()))
+            tasks.append(asyncio.create_task(worker.run_refresh_cleanup()))
             tasks.append(
                 asyncio.create_task(
                     worker.run_scheduler(resolved_settings.sync_interval_minutes)
@@ -170,6 +182,7 @@ def create_app(
     app.include_router(limitations_api.router)
     app.include_router(search_api.router)
     app.include_router(sync_api.router)
+    app.include_router(transaction_refreshes_api.router)
     app.include_router(webhooks_api.router)
 
     # Mounted last so the SPA catch-all never shadows an API route.

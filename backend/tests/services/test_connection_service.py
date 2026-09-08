@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from sqlalchemy import select
 
 from app.errors import AppError
-from app.models import BankConnection, CardAccount, Transaction
+from app.models import BankConnection, CardAccount, Owner, SyncRun, Transaction
 from app.services.connection_service import ConnectionService
 from app.services.plaid_gateway import DAYS_REQUESTED
 from tests.fakes.plaid import credit_card
@@ -290,6 +292,77 @@ async def test_list_connections_reports_every_supported_bank(
     assert chase.card_count == 2
     capital_one = next(bank for bank in summary.banks if bank.bank == "capital-one")
     assert capital_one.connected is False
+
+
+async def test_list_connections_reports_owners_latest_active_sync_attempt(
+    connection_service: ConnectionService, owner, db_session
+) -> None:
+    connection = await connection_service.exchange_public_token(
+        owner, "chase", "public-sync-attempt", "ins_3", "Chase"
+    )
+    older_attempt = datetime(2026, 9, 8, 13, 20, tzinfo=UTC)
+    latest_attempt = datetime(2026, 9, 8, 14, 30, tzinfo=UTC)
+    db_session.add_all(
+        [
+            SyncRun(
+                connection_id=connection.id,
+                outcome="succeeded",
+                started_at=older_attempt,
+            ),
+            SyncRun(
+                connection_id=connection.id,
+                outcome="failed",
+                error_code="PROVIDER_UNAVAILABLE",
+                started_at=latest_attempt,
+            ),
+        ]
+    )
+
+    other_owner = Owner(email="other@example.com", password_hash="hash")
+    db_session.add(other_owner)
+    await db_session.flush()
+    other_connection = BankConnection(
+        owner_id=other_owner.id,
+        bank_slug="citi",
+        institution_id="ins_5",
+        institution_name="Citi",
+        plaid_item_id="item-other-owner",
+        plaid_environment="test",
+        lifecycle_status="active",
+    )
+    db_session.add(other_connection)
+    await db_session.flush()
+    db_session.add(
+        SyncRun(
+            connection_id=other_connection.id,
+            outcome="succeeded",
+            started_at=datetime(2026, 9, 8, 15, 45, tzinfo=UTC),
+        )
+    )
+    removed_connection = BankConnection(
+        owner_id=owner.id,
+        bank_slug="capital-one",
+        institution_id="ins_128026",
+        institution_name="Capital One",
+        plaid_item_id="item-removed-connection",
+        plaid_environment="test",
+        lifecycle_status="removed",
+        removed_at=datetime(2026, 9, 8, 16, 50, tzinfo=UTC),
+    )
+    db_session.add(removed_connection)
+    await db_session.flush()
+    db_session.add(
+        SyncRun(
+            connection_id=removed_connection.id,
+            outcome="succeeded",
+            started_at=datetime(2026, 9, 8, 16, 45, tzinfo=UTC),
+        )
+    )
+    await db_session.flush()
+
+    summary = await connection_service.list_connections(owner)
+
+    assert summary.last_transaction_sync_attempt_at == latest_attempt
 
 
 async def test_non_credit_accounts_never_become_cards(
