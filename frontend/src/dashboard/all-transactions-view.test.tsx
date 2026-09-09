@@ -82,6 +82,35 @@ describe('All transactions dashboard view', () => {
     expect(window.location.search).toBe('?q=Paze')
   })
 
+  it('shows the combined USD aggregate only for a submitted search', async () => {
+    server.use(
+      allTransactionsHandler((query) => {
+        const response = query ? pazeAllTransactionsResponse() : recentAllTransactionsResponse()
+        if (query) {
+          response.usd_summary = {
+            usd_match_count: 3,
+            usd_pending_count: 1,
+            purchases_cents: 12_500,
+            refunds_cents: 2_000,
+            net_total_cents: 10_500,
+          }
+        }
+        return response
+      }),
+    )
+    const initial = await renderDashboard('/dashboard?view=transactions')
+    expect(await screen.findByText('Capital One Newest Purchase')).toBeInTheDocument()
+    expect(screen.queryByText('Purchases')).not.toBeInTheDocument()
+    initial.unmount()
+
+    await renderDashboard('/dashboard?q=Paze&view=transactions')
+    expect(await screen.findByText('Purchases')).toBeInTheDocument()
+    expect(screen.getByText('$125.00')).toBeInTheDocument()
+    expect(screen.getByText('$20.00')).toBeInTheDocument()
+    expect(screen.getByText('$105.00')).toBeInTheDocument()
+    expect(screen.getByText('3 USD matches · 1 pending')).toBeInTheDocument()
+  })
+
   it('renders global row identity, amount, status, unavailable mask, date fallback, and alert action safely', async () => {
     server.use(
       allTransactionsHandler(() => {

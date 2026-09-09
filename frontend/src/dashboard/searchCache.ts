@@ -14,10 +14,12 @@
 import type { GroupedSearchResponse } from './api'
 
 const STORAGE_PREFIX = 'ta:search-cache:'
+const CACHE_VERSION = 2
 /** Persisted entries older than this are treated as absent. */
 const TTL_MS = 12 * 60 * 60 * 1000
 
 interface PersistedSearchEntry {
+  version: number
   data: GroupedSearchResponse
   cachedAt: number
 }
@@ -35,6 +37,7 @@ function isPersistedSearchEntry(value: unknown): value is PersistedSearchEntry {
   return (
     typeof value === 'object' &&
     value !== null &&
+    (value as { version?: unknown }).version === CACHE_VERSION &&
     typeof (value as { cachedAt?: unknown }).cachedAt === 'number' &&
     typeof (value as { data?: unknown }).data === 'object'
   )
@@ -48,7 +51,7 @@ export function persistSearchResult(
   data: GroupedSearchResponse,
 ): void {
   try {
-    const entry: PersistedSearchEntry = { data, cachedAt: Date.now() }
+    const entry: PersistedSearchEntry = { version: CACHE_VERSION, data, cachedAt: Date.now() }
     window.sessionStorage.setItem(storageKey(ownerId, query), JSON.stringify(entry))
   } catch {
     // Caching is an enhancement, not a requirement — ignore storage errors.

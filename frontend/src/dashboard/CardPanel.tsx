@@ -3,6 +3,7 @@ import { useSearchQuery } from './SearchContext'
 import type { DashboardCardGroup } from './CardGrid'
 import { TransactionLimitAlerts } from './TransactionLimitAlerts'
 import { CreditCardOutline } from './CreditCardOutline'
+import { TransactionAggregateSummary } from './TransactionAggregateSummary'
 
 const TRANSACTION_VIEWPORT_HEIGHT = 260
 
@@ -40,6 +41,8 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
         cardName={card.name}
         mask={card.mask}
       />
+
+      {hasQuery && <TransactionAggregateSummary summary={group.usd_summary} />}
 
       <TransactionLimitAlerts alerts={limitationAlerts} />
 

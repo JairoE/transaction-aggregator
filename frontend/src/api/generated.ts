@@ -398,6 +398,7 @@ export interface components {
             rows: components["schemas"]["AllTransactionRow"][];
             /** Total Matches */
             total_matches: number;
+            usd_summary: components["schemas"]["TransactionAggregateSummaryResponse"];
         };
         /** BankConnectionResponse */
         BankConnectionResponse: {
@@ -484,6 +485,7 @@ export interface components {
             next_cursor: string | null;
             /** Transactions */
             transactions: components["schemas"]["TransactionMatch"][];
+            usd_summary: components["schemas"]["TransactionAggregateSummaryResponse"];
         };
         /** ConnectionsResponse */
         ConnectionsResponse: {
@@ -771,6 +773,19 @@ export interface components {
             queued: number;
             /** Running */
             running: number;
+        };
+        /** TransactionAggregateSummaryResponse */
+        TransactionAggregateSummaryResponse: {
+            /** Net Total Cents */
+            net_total_cents: number;
+            /** Purchases Cents */
+            purchases_cents: number;
+            /** Refunds Cents */
+            refunds_cents: number;
+            /** Usd Match Count */
+            usd_match_count: number;
+            /** Usd Pending Count */
+            usd_pending_count: number;
         };
         /** TransactionLimitAlertListResponse */
         TransactionLimitAlertListResponse: {

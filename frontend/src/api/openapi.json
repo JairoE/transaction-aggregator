@@ -82,11 +82,15 @@
           "total_matches": {
             "title": "Total Matches",
             "type": "integer"
+          },
+          "usd_summary": {
+            "$ref": "#/components/schemas/TransactionAggregateSummaryResponse"
           }
         },
         "required": [
           "query",
           "total_matches",
+          "usd_summary",
           "card_count",
           "bank_count",
           "rows",
@@ -353,12 +357,16 @@
             },
             "title": "Transactions",
             "type": "array"
+          },
+          "usd_summary": {
+            "$ref": "#/components/schemas/TransactionAggregateSummaryResponse"
           }
         },
         "required": [
           "card",
           "transactions",
           "match_count",
+          "usd_summary",
           "next_cursor",
           "has_more"
         ],
@@ -1058,6 +1066,39 @@
           "queued"
         ],
         "title": "SyncStatusResponse",
+        "type": "object"
+      },
+      "TransactionAggregateSummaryResponse": {
+        "properties": {
+          "net_total_cents": {
+            "title": "Net Total Cents",
+            "type": "integer"
+          },
+          "purchases_cents": {
+            "title": "Purchases Cents",
+            "type": "integer"
+          },
+          "refunds_cents": {
+            "title": "Refunds Cents",
+            "type": "integer"
+          },
+          "usd_match_count": {
+            "title": "Usd Match Count",
+            "type": "integer"
+          },
+          "usd_pending_count": {
+            "title": "Usd Pending Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "usd_match_count",
+          "usd_pending_count",
+          "purchases_cents",
+          "refunds_cents",
+          "net_total_cents"
+        ],
+        "title": "TransactionAggregateSummaryResponse",
         "type": "object"
       },
       "TransactionLimitAlertListResponse": {

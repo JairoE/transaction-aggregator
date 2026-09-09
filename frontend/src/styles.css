@@ -869,6 +869,61 @@ input:focus-visible {
 
 /* ---------- Dashboard screen ---------- */
 
+.transaction-aggregate-summary {
+  margin-top: 1rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface-strong);
+}
+
+.transaction-aggregate-summary__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: 0;
+}
+
+.transaction-aggregate-summary__metrics > div {
+  min-width: 0;
+  padding: 0 0.75rem;
+  border-left: 1px solid var(--color-border);
+}
+
+.transaction-aggregate-summary__metrics > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.transaction-aggregate-summary__metrics dt {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+
+.transaction-aggregate-summary__metrics dd {
+  margin: 0.1rem 0 0;
+  color: var(--color-text);
+  font-size: 1rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.transaction-aggregate-summary__details {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 420px) {
+  .transaction-aggregate-summary__metrics {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .transaction-aggregate-summary__metrics > div {
+    padding: 0;
+    border-left: 0;
+  }
+}
+
 .dashboard-page {
   max-width: 1400px;
   margin: 0 auto;

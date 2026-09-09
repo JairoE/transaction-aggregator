@@ -381,6 +381,7 @@ export function DashboardPage() {
           <AllTransactionsTable
             query={submittedQuery}
             rows={aggregateData?.rows ?? []}
+            usdSummary={aggregateData?.usd_summary}
             cardCount={cardCount}
             hasMore={aggregateData?.has_more ?? false}
             isLoadingMore={aggregateMoreMutation.isPending}

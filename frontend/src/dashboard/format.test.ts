@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { formatRelativeTimestamp } from './format'
+import { formatRelativeTimestamp, formatUsdAggregate } from './format'
+
+describe('formatUsdAggregate', () => {
+  it.each([
+    [10_000, '$100.00'],
+    [-10_000, '-$100.00'],
+  ])('formats %i cents as %s', (cents, expected) => {
+    expect(formatUsdAggregate(cents)).toBe(expected)
+  })
+})
 
 describe('formatRelativeTimestamp', () => {
   const now = new Date('2026-09-08T14:32:00Z')

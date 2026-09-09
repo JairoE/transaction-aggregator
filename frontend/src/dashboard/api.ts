@@ -13,6 +13,7 @@ export type TransactionMatch = components['schemas']['TransactionMatch']
 export type CardResponse = components['schemas']['CardResponse']
 export type AllTransactionRow = components['schemas']['AllTransactionRow']
 export type AllTransactionsResponse = components['schemas']['AllTransactionsResponse']
+export type TransactionAggregateSummaryResponse = components['schemas']['TransactionAggregateSummaryResponse']
 
 /** Matches the backend's own default (`app/services/search_service.py`). */
 export const DEFAULT_PER_CARD_LIMIT = 25
