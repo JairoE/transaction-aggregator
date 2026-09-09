@@ -14,6 +14,7 @@ import {
 } from './api'
 import { TransactionLimitationForm } from './TransactionLimitationForm'
 import { TransactionLimitationList, type BusyRuleAction } from './TransactionLimitationList'
+import { TransactionAggregatesSection } from '../aggregates/TransactionAggregatesSection'
 
 export function TransactionLimitationsPage() {
   const queryClient = useQueryClient()
@@ -105,6 +106,7 @@ export function TransactionLimitationsPage() {
             />
           </div>
         )}
+        <TransactionAggregatesSection />
       </main>
     </AppShell>
   )

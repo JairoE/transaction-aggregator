@@ -12,6 +12,13 @@ const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000
 const mergedResponse: AllTransactionsResponse = {
   query: 'Paze',
   total_matches: 1,
+  usd_summary: {
+    usd_match_count: 1,
+    usd_pending_count: 0,
+    purchases_cents: 1_999,
+    refunds_cents: 0,
+    net_total_cents: 1_999,
+  },
   card_count: 1,
   bank_count: 1,
   rows: [
@@ -52,6 +59,31 @@ afterEach(() => {
 })
 
 describe('all-transactions session cache', () => {
+  it('retains every USD summary field through sanitization', () => {
+    persistAllTransactionsResult('owner-a', 'Paze', mergedResponse)
+
+    expect(readPersistedAllTransactionsResult('owner-a', 'Paze')?.data.usd_summary).toEqual(
+      mergedResponse.usd_summary,
+    )
+  })
+
+  it('discards a version-one response without a USD summary', () => {
+    const { usd_summary: _summary, ...legacyResponse } = mergedResponse
+    window.sessionStorage.setItem(
+      CACHE_KEY,
+      JSON.stringify({
+        version: 1,
+        ownerId: 'owner-a',
+        queryKey: 'paze',
+        cachedAt: NOW,
+        data: legacyResponse,
+      }),
+    )
+
+    expect(readPersistedAllTransactionsResult('owner-a', 'Paze', NOW)).toBeNull()
+    expect(window.sessionStorage.getItem(CACHE_KEY)).toBeNull()
+  })
+
   it('round-trips a merged aggregate response for its owner and normalized submitted query', () => {
     vi.spyOn(Date, 'now').mockReturnValue(NOW)
 
@@ -90,7 +122,7 @@ describe('all-transactions session cache', () => {
     window.sessionStorage.setItem(
       CACHE_KEY,
       JSON.stringify({
-        version: 2,
+        version: 3,
         ownerId: 'owner-a',
         queryKey: 'paze',
         cachedAt: NOW,
@@ -102,7 +134,7 @@ describe('all-transactions session cache', () => {
     window.sessionStorage.setItem(
       CACHE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         ownerId: 'owner-a',
         queryKey: 'paze',
         cachedAt: NOW - TWELVE_HOURS_MS - 1,
@@ -116,7 +148,7 @@ describe('all-transactions session cache', () => {
     window.sessionStorage.setItem(
       CACHE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         ownerId: 'owner-a',
         queryKey: 'paze',
         cachedAt: NOW,
@@ -143,7 +175,7 @@ describe('all-transactions session cache', () => {
     window.sessionStorage.setItem(
       CACHE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         ownerId: 'owner-a',
         queryKey: 'paze',
         cachedAt: NOW,
@@ -182,7 +214,7 @@ describe('all-transactions session cache', () => {
       window.sessionStorage.setItem(
         CACHE_KEY,
         JSON.stringify({
-          version: 1,
+          version: 2,
           ownerId: 'owner-a',
           queryKey: 'paze',
           cachedAt: NOW,
@@ -218,7 +250,7 @@ describe('all-transactions session cache', () => {
       window.sessionStorage.setItem(
         CACHE_KEY,
         JSON.stringify({
-          version: 1,
+          version: 2,
           ownerId: 'owner-a',
           queryKey: 'paze',
           cachedAt: NOW,
@@ -245,7 +277,7 @@ describe('all-transactions session cache', () => {
       window.sessionStorage.setItem(
         CACHE_KEY,
         JSON.stringify({
-          version: 1,
+          version: 2,
           ownerId: 'owner-a',
           queryKey: 'paze',
           cachedAt: NOW,
@@ -281,7 +313,7 @@ describe('all-transactions session cache', () => {
     window.sessionStorage.setItem(
       CACHE_KEY,
       JSON.stringify({
-        version: 1,
+        version: 2,
         ownerId: 'owner-b',
         queryKey: 'juniper',
         cachedAt: NOW,

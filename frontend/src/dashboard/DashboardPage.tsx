@@ -7,6 +7,10 @@ import { AppShell } from '../shell/AppShell'
 import { DotIcon } from '../shell/icons'
 import { useOnlineStatus } from '../shell/useOnlineStatus'
 import { fetchTransactionLimitAlerts, TRANSACTION_LIMIT_ALERTS_QUERY_KEY } from '../limitations/api'
+import {
+  fetchSavedTransactionAggregates,
+  SAVED_TRANSACTION_AGGREGATES_QUERY_KEY,
+} from '../aggregates/api'
 import { AllTransactionsTable } from './AllTransactionsTable'
 import {
   persistAllTransactionsResult,
@@ -129,6 +133,14 @@ export function DashboardPage() {
     refetchOnWindowFocus: true,
     refetchIntervalInBackground: false,
   })
+  const savedAggregatesQuery = useQuery({
+    queryKey: SAVED_TRANSACTION_AGGREGATES_QUERY_KEY,
+    queryFn: fetchSavedTransactionAggregates,
+    enabled: view === 'cards',
+    refetchInterval: 60_000,
+    refetchOnWindowFocus: true,
+    refetchIntervalInBackground: false,
+  })
 
   useEffect(() => {
     if (owner && searchQuery.isSuccess && searchQuery.data) {
@@ -214,9 +226,18 @@ export function DashboardPage() {
           limitationAlerts: (limitationAlertsQuery.data?.alerts ?? []).filter(
             (alert) => alert.card.id === group.card.id,
           ),
+          savedAggregates: (savedAggregatesQuery.data?.aggregates ?? []).filter(
+            (aggregate) => aggregate.card.id === group.card.id,
+          ),
         }
       }),
-    [searchQuery.data, pageState, pendingCardId, limitationAlertsQuery.data],
+    [
+      searchQuery.data,
+      pageState,
+      pendingCardId,
+      limitationAlertsQuery.data,
+      savedAggregatesQuery.data,
+    ],
   )
 
   const aggregateData = useMemo(() => {
@@ -336,6 +357,17 @@ export function DashboardPage() {
           </p>
         )}
 
+        {view === 'cards' && savedAggregatesQuery.isError && (
+          <p
+            className="dashboard-page__aggregate-status"
+            role="status"
+            aria-label="Saved transaction aggregates"
+          >
+            Saved aggregates are temporarily unavailable. Your cards, transactions, and alerts
+            are still available.
+          </p>
+        )}
+
         <div className="dashboard-page__meta">
           {hasQuery && (
             <p className="dashboard-page__meta-text">
@@ -381,6 +413,7 @@ export function DashboardPage() {
           <AllTransactionsTable
             query={submittedQuery}
             rows={aggregateData?.rows ?? []}
+            usdSummary={aggregateData?.usd_summary}
             cardCount={cardCount}
             hasMore={aggregateData?.has_more ?? false}
             isLoadingMore={aggregateMoreMutation.isPending}

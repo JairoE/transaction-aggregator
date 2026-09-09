@@ -22,6 +22,14 @@ export function formatAmount(amountCents: number, currencyCode: string): string 
   return amountCents < 0 ? `+${formatted}` : formatted
 }
 
+/** Formats signed aggregate cents without converting refunds into statement credits. */
+export function formatUsdAggregate(cents: number): string {
+  return new Intl.NumberFormat(locale(), {
+    style: 'currency',
+    currency: 'USD',
+  }).format(cents / 100)
+}
+
 /** Screen-reader wording, since a bare number does not say which way it went. */
 export function describeAmount(amountCents: number, currencyCode: string): string {
   const formatted = new Intl.NumberFormat(locale(), {

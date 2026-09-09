@@ -2,7 +2,8 @@ import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { describeAmount, formatAmount, formatShortDate } from './format'
 import { highlightText } from './highlight'
-import type { AllTransactionRow } from './api'
+import type { AllTransactionRow, TransactionAggregateSummaryResponse } from './api'
+import { TransactionAggregateSummary } from './TransactionAggregateSummary'
 
 const PAN_LIKE_SEQUENCE = /(?<![0-9])(?:[0-9][\s-]*){12,18}[0-9](?![\s-]*[0-9])/gu
 const REDACTED_CARD_NUMBER = '[card number redacted]'
@@ -10,6 +11,7 @@ const REDACTED_CARD_NUMBER = '[card number redacted]'
 export interface AllTransactionsTableProps {
   query: string
   rows: AllTransactionRow[]
+  usdSummary?: TransactionAggregateSummaryResponse
   cardCount: number
   hasMore: boolean
   isLoadingMore: boolean
@@ -86,6 +88,7 @@ function TransactionTableRow({ row, query }: { row: AllTransactionRow; query: st
 export function AllTransactionsTable({
   query,
   rows,
+  usdSummary,
   cardCount,
   hasMore,
   isLoadingMore,
@@ -148,6 +151,7 @@ export function AllTransactionsTable({
   if (rows.length === 0) {
     return (
       <section className="all-transactions-table" aria-label="All transactions">
+        {query && usdSummary && <TransactionAggregateSummary summary={usdSummary} />}
         <p>{query ? 'No transactions match the submitted query.' : 'No cached transactions are available yet.'}</p>
       </section>
     )
@@ -155,6 +159,7 @@ export function AllTransactionsTable({
 
   return (
     <section className="all-transactions-table" aria-label="All transactions">
+      {query && usdSummary && <TransactionAggregateSummary summary={usdSummary} />}
       <div
         ref={scrollRegionRef}
         className="all-transactions-table__scroll"

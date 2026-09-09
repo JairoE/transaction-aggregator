@@ -6,6 +6,7 @@ type TransactionMatch = components['schemas']['TransactionMatch']
 type CardTransactionGroup = components['schemas']['CardTransactionGroup']
 type GroupedSearchResponse = components['schemas']['GroupedSearchResponse']
 type AllTransactionsResponse = components['schemas']['AllTransactionsResponse']
+type TransactionAggregateSummaryResponse = components['schemas']['TransactionAggregateSummaryResponse']
 type TransactionRefreshResponse = components['schemas']['TransactionRefreshResponse']
 
 const BANKS: { bank: CardResponse['bank']; displayName: string }[] = [
@@ -82,6 +83,21 @@ const PAZE_MATCH_COUNTS = [2, 1, 1, 2, 1, 1, 1, 1]
  * the "load more" flow has something real to fetch within the Paze fixture. */
 const FIRST_CARD_LOAD_MORE_CURSOR = 'cursor-co1-more'
 
+function usdSummary(
+  purchasesCents: number,
+  refundsCents: number,
+  usdMatchCount: number,
+  usdPendingCount = 0,
+): TransactionAggregateSummaryResponse {
+  return {
+    usd_match_count: usdMatchCount,
+    usd_pending_count: usdPendingCount,
+    purchases_cents: purchasesCents,
+    refunds_cents: refundsCents,
+    net_total_cents: purchasesCents - refundsCents,
+  }
+}
+
 function makeTransaction(
   overrides: Partial<TransactionMatch> & { id: string; card_id: string },
 ): TransactionMatch {
@@ -115,6 +131,7 @@ export function pazeSearchResponse(): GroupedSearchResponse {
       card,
       transactions,
       match_count: matchCount,
+      usd_summary: usdSummary(isFirstCard ? 4_499 : matchCount * 1_999, 0, matchCount),
       next_cursor: isFirstCard ? FIRST_CARD_LOAD_MORE_CURSOR : null,
       has_more: isFirstCard,
     }
@@ -144,6 +161,7 @@ export function pazeFirstCardNextPage(): CardTransactionGroup {
       }),
     ],
     match_count: 2,
+    usd_summary: usdSummary(4_499, 0, 2),
     next_cursor: null,
     has_more: false,
   }
@@ -163,6 +181,7 @@ export function recentSearchResponse(): GroupedSearchResponse {
       }),
     ],
     match_count: 1,
+    usd_summary: usdSummary(1_999, 0, 1),
     next_cursor: null,
     has_more: false,
   }))
@@ -235,6 +254,7 @@ export function recentAllTransactionsResponse(): AllTransactionsResponse {
   return {
     query: '',
     total_matches: rows.length,
+    usd_summary: usdSummary(12_312, 1_250, 4, 1),
     card_count: DASHBOARD_CARDS.length,
     bank_count: 4,
     rows,
@@ -250,6 +270,7 @@ export function pazeAllTransactionsResponse(): AllTransactionsResponse {
     ...base,
     query: 'Paze',
     total_matches: 2,
+    usd_summary: usdSummary(4_812, 1_250, 2, 1),
     rows: base.rows.slice(0, 2).map((row, index) => ({
       ...row,
       transaction: {
@@ -289,6 +310,7 @@ export function emptyAllTransactionsResponse(query = ''): AllTransactionsRespons
   return {
     query,
     total_matches: 0,
+    usd_summary: usdSummary(0, 0, 0),
     card_count: DASHBOARD_CARDS.length,
     bank_count: 4,
     rows: [],
@@ -310,6 +332,7 @@ export function zeroMatchSearchResponse(): GroupedSearchResponse {
         ? [makeTransaction({ id: `${card.id}-rare-1`, card_id: card.id, merchant_name: 'Rare Merchant' })]
         : [],
       match_count: isOnlyMatch ? 1 : 0,
+      usd_summary: usdSummary(isOnlyMatch ? 1_999 : 0, 0, isOnlyMatch ? 1 : 0),
       next_cursor: null,
       has_more: false,
     }

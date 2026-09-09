@@ -1,7 +1,12 @@
-import type { AllTransactionsResponse, CardResponse, TransactionMatch } from './api'
+import type {
+  AllTransactionsResponse,
+  CardResponse,
+  TransactionAggregateSummaryResponse,
+  TransactionMatch,
+} from './api'
 
 const STORAGE_PREFIX = 'transaction-aggregator:all-transactions:v1:'
-const CACHE_VERSION = 1
+const CACHE_VERSION = 2
 /** Keep aggregate results for the same 12 hours as dashboard search results. */
 const TTL_MS = 12 * 60 * 60 * 1000
 
@@ -86,6 +91,19 @@ function isTransactionMatch(value: unknown): value is TransactionMatch {
   )
 }
 
+function isTransactionAggregateSummary(
+  value: unknown,
+): value is TransactionAggregateSummaryResponse {
+  return (
+    isRecord(value) &&
+    Number.isFinite(value.usd_match_count) &&
+    Number.isFinite(value.usd_pending_count) &&
+    Number.isFinite(value.purchases_cents) &&
+    Number.isFinite(value.refunds_cents) &&
+    Number.isFinite(value.net_total_cents)
+  )
+}
+
 function sanitizeCard(value: CardResponse): CardResponse {
   return {
     id: value.id,
@@ -124,6 +142,7 @@ function sanitizeAllTransactionsResponse(value: unknown): AllTransactionsRespons
     typeof value.query !== 'string' ||
     !isSafeDisplayText(value.query) ||
     typeof value.total_matches !== 'number' ||
+    !isTransactionAggregateSummary(value.usd_summary) ||
     typeof value.card_count !== 'number' ||
     typeof value.bank_count !== 'number' ||
     !Array.isArray(value.rows) ||
@@ -145,6 +164,13 @@ function sanitizeAllTransactionsResponse(value: unknown): AllTransactionsRespons
   return {
     query: value.query,
     total_matches: value.total_matches,
+    usd_summary: {
+      usd_match_count: value.usd_summary.usd_match_count,
+      usd_pending_count: value.usd_summary.usd_pending_count,
+      purchases_cents: value.usd_summary.purchases_cents,
+      refunds_cents: value.usd_summary.refunds_cents,
+      net_total_cents: value.usd_summary.net_total_cents,
+    },
     card_count: value.card_count,
     bank_count: value.bank_count,
     rows,

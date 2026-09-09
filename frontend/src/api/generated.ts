@@ -191,6 +191,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/saved-transaction-aggregates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Saved Transaction Aggregates */
+        get: operations["list_saved_transaction_aggregates_api_saved_transaction_aggregates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sync/status": {
         parameters: {
             query?: never;
@@ -206,6 +223,42 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/transaction-aggregates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Transaction Aggregates */
+        get: operations["list_transaction_aggregates_api_transaction_aggregates_get"];
+        put?: never;
+        /** Create Transaction Aggregate */
+        post: operations["create_transaction_aggregate_api_transaction_aggregates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/transaction-aggregates/{aggregate_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Transaction Aggregate */
+        delete: operations["delete_transaction_aggregate_api_transaction_aggregates__aggregate_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Transaction Aggregate */
+        patch: operations["update_transaction_aggregate_api_transaction_aggregates__aggregate_id__patch"];
         trace?: never;
     };
     "/api/transaction-limit-alerts": {
@@ -398,6 +451,7 @@ export interface components {
             rows: components["schemas"]["AllTransactionRow"][];
             /** Total Matches */
             total_matches: number;
+            usd_summary: components["schemas"]["TransactionAggregateSummaryResponse"];
         };
         /** BankConnectionResponse */
         BankConnectionResponse: {
@@ -484,6 +538,7 @@ export interface components {
             next_cursor: string | null;
             /** Transactions */
             transactions: components["schemas"]["TransactionMatch"][];
+            usd_summary: components["schemas"]["TransactionAggregateSummaryResponse"];
         };
         /** ConnectionsResponse */
         ConnectionsResponse: {
@@ -512,6 +567,18 @@ export interface components {
              * @default false
              */
             confirm_trial_slot: boolean;
+        };
+        /** CreateTransactionAggregateRequest */
+        CreateTransactionAggregateRequest: {
+            /** Card Ids */
+            card_ids?: string[];
+            /**
+             * Card Scope
+             * @enum {string}
+             */
+            card_scope: "all_cards" | "selected_cards";
+            /** Keyword */
+            keyword: string;
         };
         /** CreateTransactionLimitationRequest */
         CreateTransactionLimitationRequest: {
@@ -731,6 +798,27 @@ export interface components {
              */
             type: "rolling";
         };
+        /** SavedTransactionAggregateListResponse */
+        SavedTransactionAggregateListResponse: {
+            /** Aggregates */
+            aggregates: components["schemas"]["SavedTransactionAggregateResponse"][];
+            /** Cache As Of */
+            cache_as_of: string | null;
+            /**
+             * Evaluated At
+             * Format: date-time
+             */
+            evaluated_at: string;
+        };
+        /** SavedTransactionAggregateResponse */
+        SavedTransactionAggregateResponse: {
+            /** Aggregate Id */
+            aggregate_id: string;
+            card: components["schemas"]["CardResponse"];
+            /** Keyword */
+            keyword: string;
+            summary: components["schemas"]["TransactionAggregateSummaryResponse"];
+        };
         /** SessionResponse */
         SessionResponse: {
             /** Csrf Token */
@@ -771,6 +859,50 @@ export interface components {
             queued: number;
             /** Running */
             running: number;
+        };
+        /** TransactionAggregateListResponse */
+        TransactionAggregateListResponse: {
+            /** Aggregates */
+            aggregates: components["schemas"]["TransactionAggregateResponse"][];
+            /** Cards */
+            cards: components["schemas"]["CardResponse"][];
+        };
+        /** TransactionAggregateResponse */
+        TransactionAggregateResponse: {
+            /** Card Ids */
+            card_ids: string[];
+            /**
+             * Card Scope
+             * @enum {string}
+             */
+            card_scope: "all_cards" | "selected_cards";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Keyword */
+            keyword: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TransactionAggregateSummaryResponse */
+        TransactionAggregateSummaryResponse: {
+            /** Net Total Cents */
+            net_total_cents: number;
+            /** Purchases Cents */
+            purchases_cents: number;
+            /** Refunds Cents */
+            refunds_cents: number;
+            /** Usd Match Count */
+            usd_match_count: number;
+            /** Usd Pending Count */
+            usd_pending_count: number;
         };
         /** TransactionLimitAlertListResponse */
         TransactionLimitAlertListResponse: {
@@ -960,6 +1092,15 @@ export interface components {
              * @enum {string}
              */
             state: "queued" | "refreshing" | "syncing" | "updated" | "no_changes" | "automatic_updates_only" | "cooldown" | "reconnect_required" | "outcome_unknown" | "failed" | "disconnected";
+        };
+        /** UpdateTransactionAggregateRequest */
+        UpdateTransactionAggregateRequest: {
+            /** Card Ids */
+            card_ids?: string[] | null;
+            /** Card Scope */
+            card_scope?: ("all_cards" | "selected_cards") | null;
+            /** Keyword */
+            keyword?: string | null;
         };
         /** UpdateTransactionLimitationRequest */
         UpdateTransactionLimitationRequest: {
@@ -1307,6 +1448,26 @@ export interface operations {
             };
         };
     };
+    list_saved_transaction_aggregates_api_saved_transaction_aggregates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SavedTransactionAggregateListResponse"];
+                };
+            };
+        };
+    };
     sync_status_api_sync_status_get: {
         parameters: {
             query?: never;
@@ -1323,6 +1484,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SyncStatusResponse"];
+                };
+            };
+        };
+    };
+    list_transaction_aggregates_api_transaction_aggregates_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionAggregateListResponse"];
+                };
+            };
+        };
+    };
+    create_transaction_aggregate_api_transaction_aggregates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTransactionAggregateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionAggregateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_transaction_aggregate_api_transaction_aggregates__aggregate_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                aggregate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_transaction_aggregate_api_transaction_aggregates__aggregate_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                aggregate_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTransactionAggregateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TransactionAggregateResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

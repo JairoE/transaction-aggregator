@@ -82,11 +82,15 @@
           "total_matches": {
             "title": "Total Matches",
             "type": "integer"
+          },
+          "usd_summary": {
+            "$ref": "#/components/schemas/TransactionAggregateSummaryResponse"
           }
         },
         "required": [
           "query",
           "total_matches",
+          "usd_summary",
           "card_count",
           "bank_count",
           "rows",
@@ -353,12 +357,16 @@
             },
             "title": "Transactions",
             "type": "array"
+          },
+          "usd_summary": {
+            "$ref": "#/components/schemas/TransactionAggregateSummaryResponse"
           }
         },
         "required": [
           "card",
           "transactions",
           "match_count",
+          "usd_summary",
           "next_cursor",
           "has_more"
         ],
@@ -435,6 +443,38 @@
           "bank"
         ],
         "title": "CreateLinkTokenRequest",
+        "type": "object"
+      },
+      "CreateTransactionAggregateRequest": {
+        "properties": {
+          "card_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 100,
+            "title": "Card Ids",
+            "type": "array"
+          },
+          "card_scope": {
+            "enum": [
+              "all_cards",
+              "selected_cards"
+            ],
+            "title": "Card Scope",
+            "type": "string"
+          },
+          "keyword": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Keyword",
+            "type": "string"
+          }
+        },
+        "required": [
+          "keyword",
+          "card_scope"
+        ],
+        "title": "CreateTransactionAggregateRequest",
         "type": "object"
       },
       "CreateTransactionLimitationRequest": {
@@ -937,6 +977,67 @@
         "title": "RollingWindow",
         "type": "object"
       },
+      "SavedTransactionAggregateListResponse": {
+        "properties": {
+          "aggregates": {
+            "items": {
+              "$ref": "#/components/schemas/SavedTransactionAggregateResponse"
+            },
+            "title": "Aggregates",
+            "type": "array"
+          },
+          "cache_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache As Of"
+          },
+          "evaluated_at": {
+            "format": "date-time",
+            "title": "Evaluated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "aggregates",
+          "evaluated_at",
+          "cache_as_of"
+        ],
+        "title": "SavedTransactionAggregateListResponse",
+        "type": "object"
+      },
+      "SavedTransactionAggregateResponse": {
+        "properties": {
+          "aggregate_id": {
+            "title": "Aggregate Id",
+            "type": "string"
+          },
+          "card": {
+            "$ref": "#/components/schemas/CardResponse"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/TransactionAggregateSummaryResponse"
+          }
+        },
+        "required": [
+          "aggregate_id",
+          "keyword",
+          "card",
+          "summary"
+        ],
+        "title": "SavedTransactionAggregateResponse",
+        "type": "object"
+      },
       "SessionResponse": {
         "properties": {
           "csrf_token": {
@@ -1058,6 +1159,110 @@
           "queued"
         ],
         "title": "SyncStatusResponse",
+        "type": "object"
+      },
+      "TransactionAggregateListResponse": {
+        "properties": {
+          "aggregates": {
+            "items": {
+              "$ref": "#/components/schemas/TransactionAggregateResponse"
+            },
+            "title": "Aggregates",
+            "type": "array"
+          },
+          "cards": {
+            "items": {
+              "$ref": "#/components/schemas/CardResponse"
+            },
+            "title": "Cards",
+            "type": "array"
+          }
+        },
+        "required": [
+          "aggregates",
+          "cards"
+        ],
+        "title": "TransactionAggregateListResponse",
+        "type": "object"
+      },
+      "TransactionAggregateResponse": {
+        "properties": {
+          "card_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Card Ids",
+            "type": "array"
+          },
+          "card_scope": {
+            "enum": [
+              "all_cards",
+              "selected_cards"
+            ],
+            "title": "Card Scope",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "keyword": {
+            "title": "Keyword",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "keyword",
+          "card_scope",
+          "card_ids",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "TransactionAggregateResponse",
+        "type": "object"
+      },
+      "TransactionAggregateSummaryResponse": {
+        "properties": {
+          "net_total_cents": {
+            "title": "Net Total Cents",
+            "type": "integer"
+          },
+          "purchases_cents": {
+            "title": "Purchases Cents",
+            "type": "integer"
+          },
+          "refunds_cents": {
+            "title": "Refunds Cents",
+            "type": "integer"
+          },
+          "usd_match_count": {
+            "title": "Usd Match Count",
+            "type": "integer"
+          },
+          "usd_pending_count": {
+            "title": "Usd Pending Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "usd_match_count",
+          "usd_pending_count",
+          "purchases_cents",
+          "refunds_cents",
+          "net_total_cents"
+        ],
+        "title": "TransactionAggregateSummaryResponse",
         "type": "object"
       },
       "TransactionLimitAlertListResponse": {
@@ -1665,6 +1870,55 @@
         "title": "TransactionRefreshTargetResponse",
         "type": "object"
       },
+      "UpdateTransactionAggregateRequest": {
+        "properties": {
+          "card_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 100,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Ids"
+          },
+          "card_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all_cards",
+                  "selected_cards"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Scope"
+          },
+          "keyword": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Keyword"
+          }
+        },
+        "title": "UpdateTransactionAggregateRequest",
+        "type": "object"
+      },
       "UpdateTransactionLimitationRequest": {
         "properties": {
           "card_ids": {
@@ -2244,6 +2498,27 @@
         "summary": "Health"
       }
     },
+    "/api/saved-transaction-aggregates": {
+      "get": {
+        "operationId": "list_saved_transaction_aggregates_api_saved_transaction_aggregates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedTransactionAggregateListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Saved Transaction Aggregates",
+        "tags": [
+          "transaction-aggregates"
+        ]
+      }
+    },
     "/api/sync/status": {
       "get": {
         "operationId": "sync_status_api_sync_status_get",
@@ -2262,6 +2537,151 @@
         "summary": "Sync Status",
         "tags": [
           "sync"
+        ]
+      }
+    },
+    "/api/transaction-aggregates": {
+      "get": {
+        "operationId": "list_transaction_aggregates_api_transaction_aggregates_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionAggregateListResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Transaction Aggregates",
+        "tags": [
+          "transaction-aggregates"
+        ]
+      },
+      "post": {
+        "operationId": "create_transaction_aggregate_api_transaction_aggregates_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTransactionAggregateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionAggregateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Transaction Aggregate",
+        "tags": [
+          "transaction-aggregates"
+        ]
+      }
+    },
+    "/api/transaction-aggregates/{aggregate_id}": {
+      "delete": {
+        "operationId": "delete_transaction_aggregate_api_transaction_aggregates__aggregate_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "aggregate_id",
+            "required": true,
+            "schema": {
+              "title": "Aggregate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Transaction Aggregate",
+        "tags": [
+          "transaction-aggregates"
+        ]
+      },
+      "patch": {
+        "operationId": "update_transaction_aggregate_api_transaction_aggregates__aggregate_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "aggregate_id",
+            "required": true,
+            "schema": {
+              "title": "Aggregate Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTransactionAggregateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionAggregateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Transaction Aggregate",
+        "tags": [
+          "transaction-aggregates"
         ]
       }
     },

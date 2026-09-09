@@ -19,6 +19,9 @@ async def _add_transaction(
     search_text: str,
     posted_date: date | None = None,
     authorized_date: date | None = None,
+    amount_cents: int = 100,
+    currency_code: str = "USD",
+    pending: bool = False,
 ) -> None:
     db_session.add(
         Transaction(
@@ -31,9 +34,9 @@ async def _add_transaction(
             name=search_text,
             original_description=None,
             category="Shopping",
-            amount_cents=100,
-            currency_code="USD",
-            pending=False,
+            amount_cents=amount_cents,
+            currency_code=currency_code,
+            pending=pending,
             search_text=search_text.casefold(),
         )
     )
@@ -62,6 +65,45 @@ async def test_paze_returns_ten_matches_across_eight_cards(
     assert result.total_matches == 10
     assert len(result.groups) == 8
     assert sum(group.match_count for group in result.groups) == 10
+
+
+async def test_search_summary_uses_complete_usd_matches_not_the_visible_page(
+    search_service, eight_card_owner, db_session
+) -> None:
+    card = (await search_service.list_cards(eight_card_owner.id))[0]
+    fixtures = [
+        ("summary-purchase", 12_000, "USD", False),
+        ("summary-pending", 500, "USD", True),
+        ("summary-refund", -2_000, "USD", False),
+        ("summary-cad", 9_000, "CAD", False),
+    ]
+    for transaction_id, amount_cents, currency_code, pending in fixtures:
+        await _add_transaction(
+            db_session,
+            transaction_id=transaction_id,
+            card_id=card.id,
+            search_text="Summary Sentinel",
+            posted_date=date(2026, 9, 8),
+            amount_cents=amount_cents,
+            currency_code=currency_code,
+            pending=pending,
+        )
+
+    result = await search_service.search(
+        eight_card_owner.id,
+        "Summary Sentinel",
+        per_card_limit=1,
+    )
+    group = next(item for item in result.groups if item.card.id == card.id)
+
+    assert len(group.transactions) == 1
+    assert group.match_count == 4
+    assert result.total_matches == 4
+    assert group.usd_summary.usd_match_count == 3
+    assert group.usd_summary.usd_pending_count == 1
+    assert group.usd_summary.purchases_cents == 12_500
+    assert group.usd_summary.refunds_cents == 2_000
+    assert group.usd_summary.net_total_cents == 10_500
 
 
 async def test_search_is_case_insensitive_and_preserves_display_text(

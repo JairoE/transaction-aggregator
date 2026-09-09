@@ -189,9 +189,18 @@ class AllTransactionRow(BaseModel):
     card: CardResponse
 
 
+class TransactionAggregateSummaryResponse(BaseModel):
+    usd_match_count: int
+    usd_pending_count: int
+    purchases_cents: int
+    refunds_cents: int
+    net_total_cents: int
+
+
 class AllTransactionsResponse(BaseModel):
     query: str
     total_matches: int
+    usd_summary: TransactionAggregateSummaryResponse
     card_count: int
     bank_count: int
     rows: list[AllTransactionRow]
@@ -204,6 +213,7 @@ class CardTransactionGroup(BaseModel):
     card: CardResponse
     transactions: list[TransactionMatch]
     match_count: int
+    usd_summary: TransactionAggregateSummaryResponse
     next_cursor: str | None
     has_more: bool
 
@@ -213,6 +223,45 @@ class GroupedSearchResponse(BaseModel):
     total_matches: int
     card_count: int
     groups: list[CardTransactionGroup]
+    cache_as_of: datetime | None
+
+
+class CreateTransactionAggregateRequest(BaseModel):
+    keyword: str = Field(min_length=1, max_length=100)
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class UpdateTransactionAggregateRequest(BaseModel):
+    keyword: str | None = Field(default=None, min_length=1, max_length=100)
+    card_scope: Literal["all_cards", "selected_cards"] | None = None
+    card_ids: list[str] | None = Field(default=None, max_length=100)
+
+
+class TransactionAggregateResponse(BaseModel):
+    id: str
+    keyword: str
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class TransactionAggregateListResponse(BaseModel):
+    aggregates: list[TransactionAggregateResponse]
+    cards: list[CardResponse]
+
+
+class SavedTransactionAggregateResponse(BaseModel):
+    aggregate_id: str
+    keyword: str
+    card: CardResponse
+    summary: TransactionAggregateSummaryResponse
+
+
+class SavedTransactionAggregateListResponse(BaseModel):
+    aggregates: list[SavedTransactionAggregateResponse]
+    evaluated_at: datetime
     cache_as_of: datetime | None
 
 
@@ -370,9 +419,11 @@ __all__ = [
     "CardTransactionGroup",
     "GroupedSearchResponse",
     "TransactionMatch",
+    "TransactionAggregateSummaryResponse",
     "BankSlug",
     "CardResponse",
     "ConnectionsResponse",
+    "CreateTransactionAggregateRequest",
     "CreateTransactionLimitationRequest",
     "CreateTransactionRefreshResponse",
     "CreateLinkTokenRequest",
@@ -387,7 +438,11 @@ __all__ = [
     "RollingWindow",
     "FixedWindow",
     "OwnerResponse",
+    "SavedTransactionAggregateListResponse",
+    "SavedTransactionAggregateResponse",
     "SessionResponse",
+    "TransactionAggregateListResponse",
+    "TransactionAggregateResponse",
     "TransactionLimitationListResponse",
     "TransactionLimitationResponse",
     "TransactionLimitAlertListResponse",
@@ -395,5 +450,6 @@ __all__ = [
     "TransactionRefreshResponse",
     "TransactionRefreshSummaryResponse",
     "TransactionRefreshTargetResponse",
+    "UpdateTransactionAggregateRequest",
     "UpdateTransactionLimitationRequest",
 ]
