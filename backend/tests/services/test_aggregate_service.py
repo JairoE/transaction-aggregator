@@ -181,6 +181,50 @@ async def test_evaluation_returns_each_target_card_with_complete_usd_summary(
     assert result.cache_as_of == datetime(2026, 9, 8, tzinfo=UTC)
 
 
+async def test_evaluation_freshness_ignores_cards_outside_selected_aggregates(
+    db_session,
+    owner,
+) -> None:  # type: ignore[no-untyped-def]
+    from app.services.aggregate_service import TransactionAggregateService
+
+    selected_card, _ = await _seed_cards(db_session, owner)
+    stale_connection = BankConnection(
+        owner_id=owner.id,
+        bank_slug="chase",
+        institution_id="ins-stale-aggregate",
+        institution_name="Chase",
+        plaid_item_id="item-stale-aggregate",
+        plaid_environment="test",
+        lifecycle_status="active",
+        last_successful_sync_at=datetime(2026, 1, 1, tzinfo=UTC),
+    )
+    db_session.add(
+        CardAccount(
+            connection=stale_connection,
+            plaid_account_id="aggregate-stale-card",
+            name="Freedom",
+            mask="5584",
+            is_active=True,
+            display_order=0,
+        )
+    )
+    await db_session.flush()
+
+    service = TransactionAggregateService(db_session)
+    await service.create_aggregate(
+        owner.id,
+        _create_request(
+            card_scope="selected_cards",
+            card_ids=[selected_card.id],
+        ),
+    )
+
+    result = await service.evaluate_saved_aggregates(owner.id)
+
+    assert [item.card.id for item in result.aggregates] == [selected_card.id]
+    assert result.cache_as_of == datetime(2026, 9, 8, tzinfo=UTC)
+
+
 async def test_listing_and_evaluation_exclude_other_owners_definitions(
     db_session,
     owner,

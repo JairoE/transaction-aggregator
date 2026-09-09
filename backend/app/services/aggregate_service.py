@@ -189,9 +189,11 @@ class TransactionAggregateService:
                 definition_position[item.aggregate_id],
             )
         )
+        evaluated_card_ids = {item.card.id for item in evaluations}
         successful_syncs = [
             card.last_successful_sync_at
             for card in cards
+            if card.id in evaluated_card_ids
             if card.last_successful_sync_at is not None
         ]
         return SavedAggregateResult(
