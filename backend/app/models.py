@@ -90,6 +90,9 @@ class Owner(TimestampMixin, Base):
     transaction_limitations: Mapped[list[TransactionLimitation]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
+    transaction_aggregates: Mapped[list[TransactionAggregate]] = relationship(
+        back_populates="owner", cascade="all, delete-orphan"
+    )
     transaction_refreshes: Mapped[list[TransactionRefresh]] = relationship(
         back_populates="owner", cascade="all, delete-orphan"
     )
@@ -218,6 +221,9 @@ class CardAccount(TimestampMixin, Base):
     limitation_links: Mapped[list[TransactionLimitationCard]] = relationship(
         back_populates="card", cascade="all, delete-orphan"
     )
+    aggregate_links: Mapped[list[TransactionAggregateCard]] = relationship(
+        back_populates="card", cascade="all, delete-orphan"
+    )
 
 
 class TransactionLimitation(TimestampMixin, Base):
@@ -293,6 +299,46 @@ class TransactionLimitationCard(Base):
 
     limitation: Mapped[TransactionLimitation] = relationship(back_populates="card_links")
     card: Mapped[CardAccount] = relationship(back_populates="limitation_links")
+
+
+class TransactionAggregate(TimestampMixin, Base):
+    __tablename__ = "transaction_aggregates"
+    __table_args__ = (
+        CheckConstraint(
+            "card_scope IN ('all_cards', 'selected_cards')",
+            name="ck_transaction_aggregate_card_scope",
+        ),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_id)
+    owner_id: Mapped[str] = mapped_column(
+        ForeignKey("owners.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    keyword: Mapped[str] = mapped_column(String(100), nullable=False)
+    normalized_keyword: Mapped[str] = mapped_column(String(100), nullable=False)
+    card_scope: Mapped[str] = mapped_column(String(24), nullable=False)
+
+    owner: Mapped[Owner] = relationship(back_populates="transaction_aggregates")
+    card_links: Mapped[list[TransactionAggregateCard]] = relationship(
+        back_populates="aggregate", cascade="all, delete-orphan"
+    )
+
+
+class TransactionAggregateCard(Base):
+    __tablename__ = "transaction_aggregate_cards"
+
+    aggregate_id: Mapped[str] = mapped_column(
+        ForeignKey("transaction_aggregates.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    card_account_id: Mapped[str] = mapped_column(
+        ForeignKey("card_accounts.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+    aggregate: Mapped[TransactionAggregate] = relationship(back_populates="card_links")
+    card: Mapped[CardAccount] = relationship(back_populates="aggregate_links")
 
 
 class Transaction(TimestampMixin, Base):
@@ -544,6 +590,8 @@ __all__ = [
     "SyncJob",
     "SyncRun",
     "Transaction",
+    "TransactionAggregate",
+    "TransactionAggregateCard",
     "TransactionLimitation",
     "TransactionLimitationCard",
     "TransactionRefresh",
