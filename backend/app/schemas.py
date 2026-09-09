@@ -226,6 +226,45 @@ class GroupedSearchResponse(BaseModel):
     cache_as_of: datetime | None
 
 
+class CreateTransactionAggregateRequest(BaseModel):
+    keyword: str = Field(min_length=1, max_length=100)
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str] = Field(default_factory=list, max_length=100)
+
+
+class UpdateTransactionAggregateRequest(BaseModel):
+    keyword: str | None = Field(default=None, min_length=1, max_length=100)
+    card_scope: Literal["all_cards", "selected_cards"] | None = None
+    card_ids: list[str] | None = Field(default=None, max_length=100)
+
+
+class TransactionAggregateResponse(BaseModel):
+    id: str
+    keyword: str
+    card_scope: Literal["all_cards", "selected_cards"]
+    card_ids: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+class TransactionAggregateListResponse(BaseModel):
+    aggregates: list[TransactionAggregateResponse]
+    cards: list[CardResponse]
+
+
+class SavedTransactionAggregateResponse(BaseModel):
+    aggregate_id: str
+    keyword: str
+    card: CardResponse
+    summary: TransactionAggregateSummaryResponse
+
+
+class SavedTransactionAggregateListResponse(BaseModel):
+    aggregates: list[SavedTransactionAggregateResponse]
+    evaluated_at: datetime
+    cache_as_of: datetime | None
+
+
 class AllTimeWindow(BaseModel):
     type: Literal["all_time"]
 
@@ -384,6 +423,7 @@ __all__ = [
     "BankSlug",
     "CardResponse",
     "ConnectionsResponse",
+    "CreateTransactionAggregateRequest",
     "CreateTransactionLimitationRequest",
     "CreateTransactionRefreshResponse",
     "CreateLinkTokenRequest",
@@ -398,7 +438,11 @@ __all__ = [
     "RollingWindow",
     "FixedWindow",
     "OwnerResponse",
+    "SavedTransactionAggregateListResponse",
+    "SavedTransactionAggregateResponse",
     "SessionResponse",
+    "TransactionAggregateListResponse",
+    "TransactionAggregateResponse",
     "TransactionLimitationListResponse",
     "TransactionLimitationResponse",
     "TransactionLimitAlertListResponse",
@@ -406,5 +450,6 @@ __all__ = [
     "TransactionRefreshResponse",
     "TransactionRefreshSummaryResponse",
     "TransactionRefreshTargetResponse",
+    "UpdateTransactionAggregateRequest",
     "UpdateTransactionLimitationRequest",
 ]
