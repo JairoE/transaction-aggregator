@@ -189,9 +189,18 @@ class AllTransactionRow(BaseModel):
     card: CardResponse
 
 
+class TransactionAggregateSummaryResponse(BaseModel):
+    usd_match_count: int
+    usd_pending_count: int
+    purchases_cents: int
+    refunds_cents: int
+    net_total_cents: int
+
+
 class AllTransactionsResponse(BaseModel):
     query: str
     total_matches: int
+    usd_summary: TransactionAggregateSummaryResponse
     card_count: int
     bank_count: int
     rows: list[AllTransactionRow]
@@ -204,6 +213,7 @@ class CardTransactionGroup(BaseModel):
     card: CardResponse
     transactions: list[TransactionMatch]
     match_count: int
+    usd_summary: TransactionAggregateSummaryResponse
     next_cursor: str | None
     has_more: bool
 
@@ -370,6 +380,7 @@ __all__ = [
     "CardTransactionGroup",
     "GroupedSearchResponse",
     "TransactionMatch",
+    "TransactionAggregateSummaryResponse",
     "BankSlug",
     "CardResponse",
     "ConnectionsResponse",

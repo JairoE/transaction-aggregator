@@ -27,6 +27,38 @@ async def test_search_returns_ten_grouped_paze_matches(
     assert masks == ["4812", "9064", "1187", "2041", "7730", "3628", "5509", "6144"]
 
 
+async def test_search_exposes_per_card_usd_summaries(
+    demo_client: AsyncClient, demo_login, eight_card_owner
+) -> None:
+    body = (await demo_client.get("/api/transactions/search?q=Paze")).json()
+
+    assert body["groups"][0]["usd_summary"] == {
+        "usd_match_count": 2,
+        "usd_pending_count": 0,
+        "purchases_cents": 8_668,
+        "refunds_cents": 0,
+        "net_total_cents": 8_668,
+    }
+
+
+async def test_search_exposes_zero_usd_summaries_for_empty_groups(
+    demo_client: AsyncClient, demo_login, eight_card_owner
+) -> None:
+    body = (await demo_client.get("/api/transactions/search?q=NoSuchMerchant")).json()
+
+    assert all(
+        group["usd_summary"]
+        == {
+            "usd_match_count": 0,
+            "usd_pending_count": 0,
+            "purchases_cents": 0,
+            "refunds_cents": 0,
+            "net_total_cents": 0,
+        }
+        for group in body["groups"]
+    )
+
+
 async def test_blank_search_returns_recent_rows_for_every_card(
     demo_client: AsyncClient, demo_login, eight_card_owner
 ) -> None:
@@ -177,6 +209,7 @@ async def test_all_transactions_returns_the_demo_fleet_in_global_order(
     assert set(body) == {
         "query",
         "total_matches",
+        "usd_summary",
         "card_count",
         "bank_count",
         "rows",
@@ -211,6 +244,13 @@ async def test_all_transactions_paze_rows_include_nested_transaction_and_card(
     assert all(set(row) == {"transaction", "card"} for row in body["rows"])
     assert all(row["card"]["bank"] for row in body["rows"])
     assert all(row["card"]["mask"] for row in body["rows"])
+    assert body["usd_summary"] == {
+        "usd_match_count": 10,
+        "usd_pending_count": 0,
+        "purchases_cents": 86_824,
+        "refunds_cents": 0,
+        "net_total_cents": 86_824,
+    }
 
 
 async def test_card_responses_never_serialize_malformed_or_non_four_digit_masks(

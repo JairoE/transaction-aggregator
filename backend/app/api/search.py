@@ -14,6 +14,7 @@ from app.schemas import (
     CardResponse,
     CardTransactionGroup,
     GroupedSearchResponse,
+    TransactionAggregateSummaryResponse,
     TransactionMatch,
 )
 from app.services.search_service import (
@@ -27,6 +28,7 @@ from app.services.search_service import (
     SearchService,
     TransactionRow,
 )
+from app.services.transaction_summary import TransactionSummary
 
 router = APIRouter(prefix="/api", tags=["search"])
 
@@ -45,6 +47,7 @@ def _serialize(group: CardGroup) -> CardTransactionGroup:
         card=_card_response(group.card),
         transactions=[_transaction_response(row) for row in group.transactions],
         match_count=group.match_count,
+        usd_summary=_summary_response(group.usd_summary),
         next_cursor=group.next_cursor,
         has_more=group.has_more,
     )
@@ -80,6 +83,18 @@ def _transaction_response(row: TransactionRow) -> TransactionMatch:
     )
 
 
+def _summary_response(
+    summary: TransactionSummary,
+) -> TransactionAggregateSummaryResponse:
+    return TransactionAggregateSummaryResponse(
+        usd_match_count=summary.usd_match_count,
+        usd_pending_count=summary.usd_pending_count,
+        purchases_cents=summary.purchases_cents,
+        refunds_cents=summary.refunds_cents,
+        net_total_cents=summary.net_total_cents,
+    )
+
+
 def _serialize_all_row(row: AllTransactionServiceRow) -> AllTransactionRow:
     return AllTransactionRow(
         transaction=_transaction_response(row.transaction),
@@ -105,6 +120,7 @@ async def all_transactions(
     return AllTransactionsResponse(
         query=result.query,
         total_matches=result.total_matches,
+        usd_summary=_summary_response(result.usd_summary),
         card_count=result.card_count,
         bank_count=result.bank_count,
         rows=[_serialize_all_row(row) for row in result.rows],

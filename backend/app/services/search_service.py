@@ -23,6 +23,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.errors import AppError
 from app.models import BankConnection, CardAccount, Transaction
 from app.services.plaid_gateway import SUPPORTED_BANKS
+from app.services.transaction_summary import (
+    TransactionSummary,
+    transaction_summary_columns,
+    transaction_summary_from_row,
+)
 
 MAX_QUERY_LENGTH = 100
 TRIGRAM_MINIMUM = 3
@@ -31,6 +36,7 @@ MAX_PER_CARD_LIMIT = 50
 DEFAULT_ALL_TRANSACTIONS_LIMIT = 50
 MAX_ALL_TRANSACTIONS_LIMIT = 50
 BANK_ORDER = {slug: index for index, slug in enumerate(SUPPORTED_BANKS)}
+SearchSummary = tuple[int, TransactionSummary]
 
 
 @dataclass(frozen=True)
@@ -115,6 +121,7 @@ class CardGroup:
     card: CardRow
     transactions: list[TransactionRow]
     match_count: int
+    usd_summary: TransactionSummary
     next_cursor: str | None
     has_more: bool
 
@@ -137,6 +144,7 @@ class AllTransactionRow:
 class AllTransactionsResult:
     query: str
     total_matches: int
+    usd_summary: TransactionSummary
     card_count: int
     bank_count: int
     rows: list[AllTransactionRow]
@@ -296,7 +304,7 @@ class SearchService:
         cache_as_of: datetime | None = None
 
         for card in cards:
-            match_count = await self._count(card.id, normalized)
+            match_count, usd_summary = await self._summary(card.id, normalized)
             total += match_count
             rows = await self._page(
                 card.id, normalized, limit, cursors.get(card.id)
@@ -315,6 +323,7 @@ class SearchService:
                     card=card,
                     transactions=visible,
                     match_count=match_count,
+                    usd_summary=usd_summary,
                     next_cursor=next_cursor,
                     has_more=has_more,
                 )
@@ -348,6 +357,7 @@ class SearchService:
 
         capped = max(1, min(limit, MAX_PER_CARD_LIMIT))
         normalized = normalize_query(query)
+        match_count, usd_summary = await self._summary(card_id, normalized)
         rows = await self._page(card_id, normalized, capped, cursor)
         has_more = len(rows) > capped
         visible = rows[:capped]
@@ -361,7 +371,8 @@ class SearchService:
         return CardGroup(
             card=card,
             transactions=visible,
-            match_count=await self._count(card_id, normalized),
+            match_count=match_count,
+            usd_summary=usd_summary,
             next_cursor=next_cursor,
             has_more=has_more,
         )
@@ -378,10 +389,13 @@ class SearchService:
         cards = await self.list_cards(owner_id)
         cache_as_of = _cache_as_of(cards)
         statement = self._aggregate_matching(owner_id, normalized)
-        total_statement = select(func.count()).select_from(statement.subquery())
-        total_matches = int(
-            (await self._session.execute(total_statement)).scalar_one()
-        )
+        summary_statement = statement.with_only_columns(
+            func.count().label("total_matches"),
+            *transaction_summary_columns(),
+        ).order_by(None)
+        summary_row = (await self._session.execute(summary_statement)).one()
+        total_matches = int(summary_row.total_matches)
+        usd_summary = transaction_summary_from_row(summary_row)
 
         sort_date = func.coalesce(Transaction.posted_date, Transaction.authorized_date)
         if cursor:
@@ -427,6 +441,7 @@ class SearchService:
         return AllTransactionsResult(
             query=normalized.raw,
             total_matches=total_matches,
+            usd_summary=usd_summary,
             card_count=len(cards),
             bank_count=len({card.bank for card in cards}),
             rows=rows,
@@ -456,11 +471,15 @@ class SearchService:
             .where(transaction_match_filter(normalized))
         )
 
-    async def _count(self, card_id: str, normalized: NormalizedQuery) -> int:
-        statement = select(func.count()).select_from(
-            self._matching(card_id, normalized).subquery()
-        )
-        return int((await self._session.execute(statement)).scalar_one())
+    async def _summary(
+        self, card_id: str, normalized: NormalizedQuery
+    ) -> SearchSummary:
+        statement = self._matching(card_id, normalized).with_only_columns(
+            func.count().label("total_matches"),
+            *transaction_summary_columns(),
+        ).order_by(None)
+        row = (await self._session.execute(statement)).one()
+        return int(row.total_matches), transaction_summary_from_row(row)
 
     async def _page(
         self,
