@@ -4,6 +4,7 @@ import type { DashboardCardGroup } from './CardGrid'
 import { TransactionLimitAlerts } from './TransactionLimitAlerts'
 import { CreditCardOutline } from './CreditCardOutline'
 import { TransactionAggregateSummary } from './TransactionAggregateSummary'
+import { SavedTransactionAggregates } from './SavedTransactionAggregates'
 
 const TRANSACTION_VIEWPORT_HEIGHT = 260
 
@@ -22,6 +23,7 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
     has_more: hasMore,
     isLoadingMore,
     limitationAlerts,
+    savedAggregates,
   } = group
 
   return (
@@ -41,6 +43,8 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
         cardName={card.name}
         mask={card.mask}
       />
+
+      <SavedTransactionAggregates aggregates={savedAggregates} />
 
       {hasQuery && <TransactionAggregateSummary summary={group.usd_summary} />}
 
