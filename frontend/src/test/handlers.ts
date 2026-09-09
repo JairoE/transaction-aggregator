@@ -82,6 +82,15 @@ export const handlers = [
     as_of_date: '2026-08-22',
     cache_as_of: null,
   })),
+  http.get('/api/transaction-aggregates', () => HttpResponse.json({
+    aggregates: [],
+    cards: [],
+  })),
+  http.get('/api/saved-transaction-aggregates', () => HttpResponse.json({
+    aggregates: [],
+    evaluated_at: '2026-08-22T12:00:00Z',
+    cache_as_of: null,
+  })),
 ]
 
 export function authenticatedSessionHandler() {
