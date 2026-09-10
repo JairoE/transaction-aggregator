@@ -230,6 +230,25 @@ test('upcoming step descriptions meet minimum text contrast', async ({ page }) =
   expect(contrast).toBeGreaterThanOrEqual(4.5)
 })
 
+test('dashboard collapse controls remove bank and card content from layout', async ({ page }) => {
+  await signIn(page)
+  for (const bank of BANKS) {
+    await connectBank(page, bank)
+  }
+  await page.goto('/dashboard')
+
+  const bankToggle = page.getByRole('button', { name: 'Collapse Capital One cards' })
+  const bankContent = page.locator(`#${await bankToggle.getAttribute('aria-controls')}`)
+  const cardToggle = page.locator('.card-panel__toggle').first()
+  const cardContent = page.locator(`#${await cardToggle.getAttribute('aria-controls')}`)
+
+  await cardToggle.click()
+  await expect(cardContent).toBeHidden()
+
+  await bankToggle.click()
+  await expect(bankContent).toBeHidden()
+})
+
 test('owner connects four banks and searches every card at once', async ({ page }) => {
   const errors = watchForErrors(page)
 

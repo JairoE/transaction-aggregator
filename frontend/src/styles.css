@@ -1439,6 +1439,11 @@ input:focus-visible {
   flex-direction: column;
 }
 
+.card-grid[hidden],
+.card-panel__content[hidden] {
+  display: none;
+}
+
 .card-panel__status-row {
   display: flex;
   justify-content: flex-end;
