@@ -122,6 +122,33 @@ describe('dashboard card grid', () => {
     }
   })
 
+  it('groups cards by bank and lets users collapse banks and individual cards', async () => {
+    server.use(searchHandler(() => recentSearchResponse()))
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    const bank = screen.getByRole('region', { name: 'Capital One cards' })
+    const bankToggle = within(bank).getByRole('button', { name: 'Collapse Capital One cards' })
+    const card = DASHBOARD_CARDS[0]
+    const cardRegion = regionFor(card.mask ?? '')
+    const cardToggle = within(cardRegion).getByRole('button', { name: `Collapse ${card.name}` })
+
+    expect(bankToggle).toHaveAttribute('aria-expanded', 'true')
+    expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(cardToggle)
+
+    expect(cardToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(cardToggle).toHaveAccessibleName(`Expand ${card.name}`)
+    expect(within(cardRegion).queryByRole('img')).not.toBeInTheDocument()
+    expect(within(cardRegion).queryByRole('link', { name: /set alert/i })).not.toBeInTheDocument()
+
+    await user.click(bankToggle)
+
+    expect(bankToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(bank).queryByRole('region', { name: /card ending in/i })).not.toBeInTheDocument()
+  })
+
   it('shows the latest sync attempt with relative and exact timestamps', async () => {
     const attemptedAt = new Date(Date.now() - 2 * 60_000).toISOString()
     server.use(
