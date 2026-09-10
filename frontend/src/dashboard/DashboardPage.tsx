@@ -31,6 +31,7 @@ import { recordSearchHistory } from './searchHistory'
 import { SearchBar } from './SearchBar'
 import { SearchQueryProvider } from './SearchContext'
 import { RefreshTransactionsControl } from './RefreshTransactionsControl'
+import { TransactionAggregateSummary } from './TransactionAggregateSummary'
 import { useTransactionRefresh } from './useTransactionRefresh'
 
 interface CardPageState {
@@ -69,6 +70,27 @@ function uniqueRows(rows: AllTransactionRow[]): AllTransactionRow[] {
     ids.add(row.transaction.id)
     return true
   })
+}
+
+function aggregateUsdSummaries(
+  groups: Array<Pick<DashboardCardGroup, 'usd_summary'>>,
+): DashboardCardGroup['usd_summary'] {
+  return groups.reduce(
+    (total, group) => ({
+      usd_match_count: total.usd_match_count + group.usd_summary.usd_match_count,
+      usd_pending_count: total.usd_pending_count + group.usd_summary.usd_pending_count,
+      purchases_cents: total.purchases_cents + group.usd_summary.purchases_cents,
+      refunds_cents: total.refunds_cents + group.usd_summary.refunds_cents,
+      net_total_cents: total.net_total_cents + group.usd_summary.net_total_cents,
+    }),
+    {
+      usd_match_count: 0,
+      usd_pending_count: 0,
+      purchases_cents: 0,
+      refunds_cents: 0,
+      net_total_cents: 0,
+    },
+  )
 }
 
 export function DashboardPage() {
@@ -251,6 +273,11 @@ export function DashboardPage() {
     }
   }, [allTransactionsQuery.data, aggregatePage, submittedQuery])
 
+  const dashboardSearchSummary = useMemo(() => {
+    if (!submittedQuery || searchQuery.data?.query !== submittedQuery) return null
+    return aggregateUsdSummaries(searchQuery.data.groups)
+  }, [searchQuery.data, submittedQuery])
+
   const connectionFleet = useMemo(() => {
     const representedBanks = (connectionsQuery.data?.banks ?? []).filter(
       (bank) => bank.connected && bank.card_count > 0,
@@ -387,6 +414,14 @@ export function DashboardPage() {
             <span className="dashboard-page__hint">Try searching for Paze</span>
           )}
         </div>
+
+        {view === 'cards' && dashboardSearchSummary && (
+          <section className="dashboard-search-total" aria-labelledby="dashboard-search-total-heading">
+            <h2 id="dashboard-search-total-heading">Search total</h2>
+            <p>Across all cards · USD transactions</p>
+            <TransactionAggregateSummary summary={dashboardSearchSummary} />
+          </section>
+        )}
 
         {view === 'cards' ? (
           searchQuery.isPending ? (

@@ -308,6 +308,39 @@ describe('dashboard card grid', () => {
     expect(within(card).getByText('3 USD matches · 1 pending')).toBeInTheDocument()
   })
 
+  it('shows a dashboard USD total across every card in a submitted search', async () => {
+    server.use(
+      searchHandler((query) => {
+        if (!query) return recentSearchResponse()
+        const response = pazeSearchResponse()
+        response.groups[0] = {
+          ...response.groups[0],
+          usd_summary: {
+            usd_match_count: 2,
+            usd_pending_count: 1,
+            purchases_cents: 4_499,
+            refunds_cents: 500,
+            net_total_cents: 3_999,
+          },
+        }
+        return response
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
+
+    const total = await screen.findByRole('region', { name: 'Search total' })
+    expect(within(total).getByText('Purchases')).toBeInTheDocument()
+    expect(within(total).getByText('Refunds')).toBeInTheDocument()
+    expect(within(total).getByText('$5.00')).toBeInTheDocument()
+    expect(within(total).getByText('Net')).toBeInTheDocument()
+    expect(within(total).getByText('$204.91')).toBeInTheDocument()
+    expect(within(total).getByText('$199.91')).toBeInTheDocument()
+    expect(within(total).getByText('10 USD matches · 1 pending')).toBeInTheDocument()
+  })
+
   it('loading more on one card only changes that card, leaving the others untouched', async () => {
     server.use(
       searchHandler((query) => (query ? pazeSearchResponse() : recentSearchResponse())),

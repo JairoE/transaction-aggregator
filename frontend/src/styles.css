@@ -1075,6 +1075,20 @@ input:focus-visible {
   font-size: 0.9rem;
 }
 
+.dashboard-search-total {
+  margin-top: 1rem;
+}
+
+.dashboard-search-total h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-search-total > p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+}
+
 .dashboard-page__clear {
   background: transparent;
   color: var(--color-accent);
