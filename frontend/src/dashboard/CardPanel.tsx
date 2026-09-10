@@ -32,7 +32,7 @@ export function CardPanel({ group, onLoadMore }: CardPanelProps) {
 
   return (
     <section
-      className="card-panel"
+      className={`card-panel${isExpanded ? '' : ' card-panel--collapsed'}`}
       aria-label={`${card.bank_display_name} card ending in ${card.mask ?? 'unknown'}`}
     >
       <header className="card-panel__header">

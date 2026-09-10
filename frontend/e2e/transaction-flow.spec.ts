@@ -241,9 +241,13 @@ test('dashboard collapse controls remove bank and card content from layout', asy
   const bankContent = page.locator(`#${await bankToggle.getAttribute('aria-controls')}`)
   const cardToggle = page.locator('.card-panel__toggle').first()
   const cardContent = page.locator(`#${await cardToggle.getAttribute('aria-controls')}`)
+  const cardPanel = cardContent.locator('..')
 
   await cardToggle.click()
   await expect(cardContent).toBeHidden()
+  await expect
+    .poll(() => cardPanel.evaluate((element) => element.getBoundingClientRect().height))
+    .toBeLessThan(100)
 
   await bankToggle.click()
   await expect(bankContent).toBeHidden()
