@@ -11,17 +11,17 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
-  issues: write
 
 jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
       - name: Run tri-review on this PR
-        uses: JairoE/tri-review@v1
+        uses: JairoE/tri-review@a9ad75ceabb48b7a207130adf71ec93a99b23b3a # v1.0.1
         with:
           pr-number: ${{ github.event.pull_request.number }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
