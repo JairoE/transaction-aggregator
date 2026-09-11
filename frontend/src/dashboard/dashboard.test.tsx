@@ -122,6 +122,33 @@ describe('dashboard card grid', () => {
     }
   })
 
+  it('groups cards by bank and lets users collapse banks and individual cards', async () => {
+    server.use(searchHandler(() => recentSearchResponse()))
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    const bank = screen.getByRole('region', { name: 'Capital One cards' })
+    const bankToggle = within(bank).getByRole('button', { name: 'Collapse Capital One cards' })
+    const card = DASHBOARD_CARDS[0]
+    const cardRegion = regionFor(card.mask ?? '')
+    const cardToggle = within(cardRegion).getByRole('button', { name: `Collapse ${card.name}` })
+
+    expect(bankToggle).toHaveAttribute('aria-expanded', 'true')
+    expect(cardToggle).toHaveAttribute('aria-expanded', 'true')
+
+    await user.click(cardToggle)
+
+    expect(cardToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(cardToggle).toHaveAccessibleName(`Expand ${card.name}`)
+    expect(within(cardRegion).queryByRole('img')).not.toBeInTheDocument()
+    expect(within(cardRegion).queryByRole('link', { name: /set alert/i })).not.toBeInTheDocument()
+
+    await user.click(bankToggle)
+
+    expect(bankToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(within(bank).queryByRole('region', { name: /card ending in/i })).not.toBeInTheDocument()
+  })
+
   it('shows the latest sync attempt with relative and exact timestamps', async () => {
     const attemptedAt = new Date(Date.now() - 2 * 60_000).toISOString()
     server.use(
@@ -279,6 +306,39 @@ describe('dashboard card grid', () => {
     expect(within(card).getByText('Net')).toBeInTheDocument()
     expect(within(card).getByText('$105.00')).toBeInTheDocument()
     expect(within(card).getByText('3 USD matches · 1 pending')).toBeInTheDocument()
+  })
+
+  it('shows a dashboard USD total across every card in a submitted search', async () => {
+    server.use(
+      searchHandler((query) => {
+        if (!query) return recentSearchResponse()
+        const response = pazeSearchResponse()
+        response.groups[0] = {
+          ...response.groups[0],
+          usd_summary: {
+            usd_match_count: 2,
+            usd_pending_count: 1,
+            purchases_cents: 4_499,
+            refunds_cents: 500,
+            net_total_cents: 3_999,
+          },
+        }
+        return response
+      }),
+    )
+    const user = userEvent.setup()
+    await renderDashboard()
+
+    await user.type(screen.getByRole('searchbox', { name: /search transactions/i }), 'Paze{Enter}')
+
+    const total = await screen.findByRole('region', { name: 'Search total' })
+    expect(within(total).getByText('Purchases')).toBeInTheDocument()
+    expect(within(total).getByText('Refunds')).toBeInTheDocument()
+    expect(within(total).getByText('$5.00')).toBeInTheDocument()
+    expect(within(total).getByText('Net')).toBeInTheDocument()
+    expect(within(total).getByText('$204.91')).toBeInTheDocument()
+    expect(within(total).getByText('$199.91')).toBeInTheDocument()
+    expect(within(total).getByText('10 USD matches · 1 pending')).toBeInTheDocument()
   })
 
   it('loading more on one card only changes that card, leaving the others untouched', async () => {

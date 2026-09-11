@@ -1075,6 +1075,20 @@ input:focus-visible {
   font-size: 0.9rem;
 }
 
+.dashboard-search-total {
+  margin-top: 1rem;
+}
+
+.dashboard-search-total h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.dashboard-search-total > p {
+  margin: 0.2rem 0 0;
+  font-size: 0.85rem;
+}
+
 .dashboard-page__clear {
   background: transparent;
   color: var(--color-accent);
@@ -1338,10 +1352,50 @@ input:focus-visible {
   }
 }
 
+.bank-card-groups {
+  display: grid;
+  gap: 1rem;
+}
+
+.bank-card-group {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+}
+
+.bank-card-group__heading {
+  margin: 0;
+}
+
+.bank-card-group__toggle,
+.card-panel__toggle {
+  width: 100%;
+  justify-content: space-between;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 600;
+  text-align: left;
+}
+
+.bank-card-group__toggle:hover,
+.card-panel__toggle:hover {
+  background: var(--color-surface-strong);
+}
+
+.disclosure-indicator {
+  color: var(--color-accent);
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.25rem;
+  padding: 0 1.1rem 1.1rem;
 }
 
 @media (max-width: 1199px) {
@@ -1370,18 +1424,34 @@ input:focus-visible {
   flex-direction: column;
 }
 
-.card-panel__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
+.card-panel--collapsed {
+  min-height: 0;
 }
 
-.card-panel__bank {
+.card-panel__header {
+  margin: -0.6rem -0.6rem 0;
+}
+
+.card-panel__title {
   margin: 0;
   font-size: 1rem;
-  font-weight: 600;
-  color: var(--color-text);
+}
+
+.card-panel__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.card-grid[hidden],
+.card-panel__content[hidden] {
+  display: none;
+}
+
+.card-panel__status-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
 }
 
 .credit-card-outline {
