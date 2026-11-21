@@ -21,7 +21,7 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       - name: Run tri-review on this PR
-        uses: JairoE/tri-review@a9ad75ceabb48b7a207130adf71ec93a99b23b3a # v1.0.1
+        uses: JairoE/tri-review@e5e4502bcb787963d72fcf506047ac1edacf554b # v1.3.0 + #60, #61 (main at #62)
         with:
           pr-number: ${{ github.event.pull_request.number }}
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
